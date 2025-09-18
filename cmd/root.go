@@ -38,4 +38,5 @@ func init() {
 	RootCmd.AddCommand(statusCmd)
 	RootCmd.AddCommand(prCommand)
 	RootCmd.AddCommand(trunkCmd)
+	RootCmd.AddCommand(undoCommitCmd)
 }
