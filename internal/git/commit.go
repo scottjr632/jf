@@ -24,6 +24,22 @@ func Commit(message string) error {
 	return cli.ExecuteCommandInTerminal("git", "commit", "-m", message)
 }
 
+func CherryPick(sha string) error {
+	return cli.ExecuteCommandInTerminal("git", "cherry-pick", sha)
+}
+
+func ResetSoft(ref string) error {
+	return cli.ExecuteCommandInTerminal("git", "reset", "--soft", ref)
+}
+
+func ResetMixed(ref string) error {
+	return cli.ExecuteCommandInTerminal("git", "reset", ref)
+}
+
+func ResetHard(ref string) error {
+	return cli.ExecuteCommandInTerminal("git", "reset", "--hard", ref)
+}
+
 func CommitAsync(message string) <-chan cli.CmdResult {
 	return runGitAsync("commit", "-m", message)
 }
