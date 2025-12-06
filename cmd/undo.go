@@ -47,6 +47,10 @@ var undoCommitCmd = &cobra.Command{
 			return err
 		}
 
+		// RestackChildren marks the current stack and descendants as needing a restack.
+		// After successfully restacking, clear the flag on the current stack before saving.
+		stack.NeedsRestack = false
+
 		return engine.Save()
 	},
 }
