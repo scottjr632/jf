@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"strings"
 
 	"github.com/scottjr632/jf-cli/internal/git"
@@ -10,9 +9,10 @@ import (
 )
 
 type amendArgs struct {
-	edit     bool
-	worktree string
-	gitArgs  []string
+	edit           bool
+	worktree       string
+	promptWorktree bool
+	gitArgs        []string
 }
 
 func newAmendCmd(opts *rootOptions) *cobra.Command {
@@ -28,6 +28,13 @@ func newAmendCmd(opts *rootOptions) *cobra.Command {
 			}
 
 			repo := opts.repo
+			if parsed.worktree == "" && parsed.promptWorktree {
+				selection, err := promptWorktreeSelection(cmd.Context(), opts.repo)
+				if err != nil {
+					return err
+				}
+				parsed.worktree = selection
+			}
 			if parsed.worktree != "" {
 				path, err := worktree.ResolvePath(cmd.Context(), opts.repo, parsed.worktree)
 				if err != nil {
@@ -69,8 +76,9 @@ func parseAmendArgs(args []string) (amendArgs, error) {
 			continue
 		}
 		if arg == "--worktree" {
-			if i+1 >= len(args) {
-				return parsed, errors.New("expected value after --worktree")
+			if i+1 >= len(args) || args[i+1] == "--" || strings.HasPrefix(args[i+1], "-") {
+				parsed.promptWorktree = true
+				continue
 			}
 			parsed.worktree = args[i+1]
 			i++
@@ -79,7 +87,8 @@ func parseAmendArgs(args []string) (amendArgs, error) {
 		if after, ok := strings.CutPrefix(arg, "--worktree="); ok {
 			value := after
 			if value == "" {
-				return parsed, errors.New("expected value after --worktree")
+				parsed.promptWorktree = true
+				continue
 			}
 			parsed.worktree = value
 			continue
