@@ -1,7 +1,12 @@
 package cli
 
 import (
+	"bufio"
+	"context"
 	"errors"
+	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/scottjr632/jf-cli/internal/git"
@@ -38,6 +43,10 @@ func newCommitCmd(opts *rootOptions) *cobra.Command {
 				repo = path
 			}
 
+			if err := stageForCommit(cmd.Context(), repo); err != nil {
+				return err
+			}
+
 			gitArgs := []string{"commit"}
 			if parsed.amend {
 				gitArgs = append(gitArgs, "--amend")
@@ -48,6 +57,77 @@ func newCommitCmd(opts *rootOptions) *cobra.Command {
 	}
 
 	return cmd
+}
+
+func stageForCommit(ctx context.Context, repo string) error {
+	if err := git.RunPassthrough(ctx, repo, "add", "-p"); err != nil {
+		return err
+	}
+
+	untracked, err := listUntrackedFiles(ctx, repo)
+	if err != nil {
+		return err
+	}
+	if len(untracked) == 0 {
+		return nil
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	for _, path := range untracked {
+		ok, err := promptYesNo(reader, fmt.Sprintf("Add untracked file %q? [y/N]: ", path))
+		if err != nil {
+			return err
+		}
+		if ok {
+			if _, err := git.Run(ctx, repo, "add", "--", path); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func listUntrackedFiles(ctx context.Context, repo string) ([]string, error) {
+	out, err := git.Run(ctx, repo, "ls-files", "--others", "--exclude-standard", "-z")
+	if err != nil {
+		return nil, err
+	}
+	if out == "" {
+		return nil, nil
+	}
+
+	parts := strings.Split(out, "\x00")
+	paths := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		paths = append(paths, part)
+	}
+
+	return paths, nil
+}
+
+func promptYesNo(reader *bufio.Reader, prompt string) (bool, error) {
+	for {
+		fmt.Fprint(os.Stdout, prompt)
+		text, err := reader.ReadString('\n')
+		if err != nil && len(text) == 0 {
+			return false, err
+		}
+
+		trimmed := strings.TrimSpace(strings.ToLower(text))
+		if trimmed == "y" || trimmed == "yes" {
+			return true, nil
+		}
+		if trimmed == "" || trimmed == "n" || trimmed == "no" {
+			return false, nil
+		}
+		if err == io.EOF {
+			return false, err
+		}
+	}
 }
 
 func parseCommitArgs(args []string) (commitArgs, error) {

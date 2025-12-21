@@ -23,6 +23,8 @@ jf remove <path|name>
 jf prune
 ```
 
+`jf commit` runs `git add -p` and then prompts to add untracked files before committing.
+
 When you pass a relative path that does not start with `./` or `../`, `jf`
 stores worktrees under `~/.jf/<repo>/worktrees/<name>`. Use `./path` or an
 absolute path to opt out.
