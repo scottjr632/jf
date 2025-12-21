@@ -16,6 +16,7 @@ Worktree commands:
 jf list
 jf add <path|name> [ref]
 jf checkout <path|name>
+jf commit [--amend] [--worktree <path|name>] [-- <git commit args...>]
 jf remove <path|name>
 jf prune
 ```
