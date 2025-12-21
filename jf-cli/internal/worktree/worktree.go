@@ -91,6 +91,38 @@ func Merge(ctx context.Context, repo, sourcePath, targetBranch string) error {
 	return err
 }
 
+// PathForBranch returns the worktree path for a branch.
+func PathForBranch(ctx context.Context, repo, branch string) (string, error) {
+	if branch == "" {
+		return "", fmt.Errorf("branch is required")
+	}
+	path, err := worktreePathForBranch(ctx, repo, branch)
+	if err != nil {
+		return "", err
+	}
+	if path == "" {
+		return "", fmt.Errorf("worktree for branch %q not found", branch)
+	}
+	return path, nil
+}
+
+// PathForBranches returns the worktree path for the first matching branch.
+func PathForBranches(ctx context.Context, repo string, branches []string) (string, error) {
+	for _, branch := range branches {
+		if strings.TrimSpace(branch) == "" {
+			continue
+		}
+		path, err := worktreePathForBranch(ctx, repo, branch)
+		if err != nil {
+			return "", err
+		}
+		if path != "" {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("worktree for branches %v not found", branches)
+}
+
 func resolveWorktreePath(ctx context.Context, repo, path string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("worktree path is required")

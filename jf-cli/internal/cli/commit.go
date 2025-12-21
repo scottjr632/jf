@@ -71,8 +71,8 @@ func parseCommitArgs(args []string) (commitArgs, error) {
 			i++
 			continue
 		}
-		if strings.HasPrefix(arg, "--worktree=") {
-			value := strings.TrimPrefix(arg, "--worktree=")
+		if after, ok := strings.CutPrefix(arg, "--worktree="); ok {
+			value := after
 			if value == "" {
 				return parsed, errors.New("expected value after --worktree")
 			}

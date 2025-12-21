@@ -257,6 +257,45 @@ func TestMergeFailsWhenDetached(t *testing.T) {
 	}
 }
 
+func TestPathForBranchFindsWorktree(t *testing.T) {
+	original := runGit
+	defer func() { runGit = original }()
+
+	var gotArgs []string
+	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
+		gotArgs = append([]string{}, args...)
+		return "worktree /tmp/main\nHEAD 123\nbranch refs/heads/main\n", nil
+	}
+
+	gotPath, err := PathForBranch(context.Background(), "/repo", "main")
+	if err != nil {
+		t.Fatalf("PathForBranch returned error: %v", err)
+	}
+	if gotPath != "/tmp/main" {
+		t.Fatalf("expected path %q, got %q", "/tmp/main", gotPath)
+	}
+	if !reflect.DeepEqual(gotArgs, []string{"worktree", "list", "--porcelain"}) {
+		t.Fatalf("expected args %v, got %v", []string{"worktree", "list", "--porcelain"}, gotArgs)
+	}
+}
+
+func TestPathForBranchesFallsBack(t *testing.T) {
+	original := runGit
+	defer func() { runGit = original }()
+
+	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
+		return "worktree /tmp/master\nHEAD 123\nbranch refs/heads/master\n", nil
+	}
+
+	gotPath, err := PathForBranches(context.Background(), "/repo", []string{"main", "master"})
+	if err != nil {
+		t.Fatalf("PathForBranches returned error: %v", err)
+	}
+	if gotPath != "/tmp/master" {
+		t.Fatalf("expected path %q, got %q", "/tmp/master", gotPath)
+	}
+}
+
 func TestAddPropagatesError(t *testing.T) {
 	original := runGit
 	defer func() { runGit = original }()
