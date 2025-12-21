@@ -46,6 +46,7 @@ func newRootCommand() *cobra.Command {
 // Execute builds the root command and exits with the correct status code.
 func Execute() {
 	cmd := newRootCommand()
+	cmd.InitDefaultCompletionCmd()
 	args := os.Args[1:]
 	if shouldPassthrough(cmd, args) {
 		repo, gitArgs := splitRepoFlags(args)
