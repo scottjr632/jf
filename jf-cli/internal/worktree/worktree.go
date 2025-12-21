@@ -61,6 +61,36 @@ func Prune(ctx context.Context, repo string) error {
 	return err
 }
 
+// Merge merges the branch for the source worktree into the target branch.
+func Merge(ctx context.Context, repo, sourcePath, targetBranch string) error {
+	if targetBranch == "" {
+		return fmt.Errorf("target branch is required")
+	}
+	resolvedPath, err := resolveWorktreePath(ctx, repo, sourcePath)
+	if err != nil {
+		return err
+	}
+	sourceBranch, err := worktreeBranch(ctx, repo, resolvedPath)
+	if err != nil {
+		return err
+	}
+	if sourceBranch == "" {
+		return fmt.Errorf("worktree %q is detached", resolvedPath)
+	}
+	if sourceBranch == targetBranch {
+		return fmt.Errorf("worktree %q is already on %q", resolvedPath, targetBranch)
+	}
+	targetPath, err := worktreePathForBranch(ctx, repo, targetBranch)
+	if err != nil {
+		return err
+	}
+	if targetPath == "" {
+		return fmt.Errorf("worktree for branch %q not found", targetBranch)
+	}
+	_, err = runGit(ctx, targetPath, "merge", sourceBranch)
+	return err
+}
+
 func resolveWorktreePath(ctx context.Context, repo, path string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("worktree path is required")
@@ -133,6 +163,29 @@ func worktreeBranch(ctx context.Context, repo, resolvedPath string) (string, err
 			}
 		}
 		return "", nil
+	}
+	return "", nil
+}
+
+func worktreePathForBranch(ctx context.Context, repo, branch string) (string, error) {
+	output, err := runGit(ctx, repo, "worktree", "list", "--porcelain")
+	if err != nil {
+		return "", err
+	}
+	lines := strings.Split(output, "\n")
+	worktreePath := ""
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if strings.HasPrefix(line, "worktree ") {
+			worktreePath = strings.TrimSpace(strings.TrimPrefix(line, "worktree "))
+			continue
+		}
+		if strings.HasPrefix(line, "branch ") {
+			ref := strings.TrimSpace(strings.TrimPrefix(line, "branch "))
+			if strings.TrimPrefix(ref, "refs/heads/") == branch {
+				return worktreePath, nil
+			}
+		}
 	}
 	return "", nil
 }

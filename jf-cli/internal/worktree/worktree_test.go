@@ -198,6 +198,65 @@ func TestPruneUsesGitWorktreePrune(t *testing.T) {
 	}
 }
 
+func TestMergeUsesTargetWorktree(t *testing.T) {
+	original := runGit
+	defer func() { runGit = original }()
+
+	var gotCalls []struct {
+		repo string
+		args []string
+	}
+	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
+		gotCalls = append(gotCalls, struct {
+			repo string
+			args []string
+		}{
+			repo: repo,
+			args: append([]string{}, args...),
+		})
+		if reflect.DeepEqual(args, []string{"worktree", "list", "--porcelain"}) {
+			return "worktree /tmp/main\nHEAD 123\nbranch refs/heads/main\n\nworktree /tmp/feature\nHEAD 456\nbranch refs/heads/feature\n", nil
+		}
+		return "", nil
+	}
+
+	if err := Merge(context.Background(), "/repo", "/tmp/feature", "main"); err != nil {
+		t.Fatalf("Merge returned error: %v", err)
+	}
+
+	if len(gotCalls) != 3 {
+		t.Fatalf("expected 3 git calls, got %d", len(gotCalls))
+	}
+	if !reflect.DeepEqual(gotCalls[0].args, []string{"worktree", "list", "--porcelain"}) {
+		t.Fatalf("expected first call to list worktrees, got %v", gotCalls[0].args)
+	}
+	if !reflect.DeepEqual(gotCalls[1].args, []string{"worktree", "list", "--porcelain"}) {
+		t.Fatalf("expected second call to list worktrees, got %v", gotCalls[1].args)
+	}
+	if gotCalls[2].repo != "/tmp/main" {
+		t.Fatalf("expected merge to run in %q, got %q", "/tmp/main", gotCalls[2].repo)
+	}
+	if !reflect.DeepEqual(gotCalls[2].args, []string{"merge", "feature"}) {
+		t.Fatalf("expected merge args %v, got %v", []string{"merge", "feature"}, gotCalls[2].args)
+	}
+}
+
+func TestMergeFailsWhenDetached(t *testing.T) {
+	original := runGit
+	defer func() { runGit = original }()
+
+	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
+		if reflect.DeepEqual(args, []string{"worktree", "list", "--porcelain"}) {
+			return "worktree /tmp/feature\nHEAD 456\ndetached\n", nil
+		}
+		return "", nil
+	}
+
+	if err := Merge(context.Background(), "/repo", "/tmp/feature", "main"); err == nil {
+		t.Fatalf("expected merge to fail for detached worktree")
+	}
+}
+
 func TestAddPropagatesError(t *testing.T) {
 	original := runGit
 	defer func() { runGit = original }()
