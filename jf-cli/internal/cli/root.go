@@ -34,6 +34,7 @@ func newRootCommand() *cobra.Command {
 		newMainCmd(opts),
 		newMergeCmd(opts),
 		newCommitCmd(opts),
+		newAmendCmd(opts),
 		newRemoveCmd(opts),
 		newPruneCmd(opts),
 		newGitCmd(opts),

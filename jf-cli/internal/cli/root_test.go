@@ -14,6 +14,7 @@ func TestShouldPassthrough(t *testing.T) {
 		{name: "list", args: []string{"list"}, want: false},
 		{name: "main", args: []string{"main"}, want: false},
 		{name: "commit", args: []string{"commit"}, want: false},
+		{name: "amend", args: []string{"amend"}, want: false},
 		{name: "help", args: []string{"help"}, want: false},
 		{name: "help-flag", args: []string{"--help"}, want: false},
 		{name: "short-help", args: []string{"-h"}, want: false},
