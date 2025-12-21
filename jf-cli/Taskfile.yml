@@ -1,0 +1,34 @@
+version: "3"
+
+vars:
+  BIN_DIR: ./bin
+  BIN_NAME: jf
+  BIN_PATH: "{{.BIN_DIR}}/{{.BIN_NAME}}"
+  INSTALL_DIR:
+    sh: |
+      GOBIN="$(go env GOBIN)"
+      if [ -n "$GOBIN" ]; then
+        echo "$GOBIN"
+      else
+        echo "$(go env GOPATH)/bin"
+      fi
+
+tasks:
+  build:
+    desc: Build the jf binary
+    cmds:
+      - mkdir -p "{{.BIN_DIR}}"
+      - go build -o "{{.BIN_PATH}}" ./cmd/jf
+
+  run:
+    desc: Run jf without installing
+    cmds:
+      - go run ./cmd/jf
+
+  install:
+    desc: Build and copy jf to your Go bin directory
+    cmds:
+      - task: build
+      - mkdir -p "{{.INSTALL_DIR}}"
+      - install -m 0755 "{{.BIN_PATH}}" "{{.INSTALL_DIR}}/{{.BIN_NAME}}"
+
