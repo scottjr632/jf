@@ -14,7 +14,7 @@ Worktree commands:
 
 ```sh
 jf list
-jf add <path|name> [ref]
+jf new <path|name> [ref]
 jf checkout <path|name>
 jf main
 jf merge <path|name> [--into <branch>]
@@ -27,7 +27,7 @@ When you pass a relative path that does not start with `./` or `../`, `jf`
 stores worktrees under `~/.jf/<repo>/worktrees/<name>`. Use `./path` or an
 absolute path to opt out.
 
-`jf add` opens a subshell in the new worktree by default. Use
+`jf new` opens a subshell in the new worktree by default. Use
 `--no-checkout` to skip that behavior.
 
 Git passthrough:

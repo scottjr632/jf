@@ -7,12 +7,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newAddCmd(opts *rootOptions) *cobra.Command {
+func newNewCmd(opts *rootOptions) *cobra.Command {
 	var noCheckout bool
 
 	cmd := &cobra.Command{
-		Use:   "add <path|name> [ref]",
-		Short: "Add a new worktree",
+		Use:   "new <path|name> [ref]",
+		Short: "Create a new worktree",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) < 1 || len(args) > 2 {
 				return errors.New("expected <path|name> and optional [ref]")

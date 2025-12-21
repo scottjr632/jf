@@ -2,8 +2,8 @@ package cli
 
 import "testing"
 
-func TestAddArgsValidation(t *testing.T) {
-	cmd := newAddCmd(&rootOptions{})
+func TestNewArgsValidation(t *testing.T) {
+	cmd := newNewCmd(&rootOptions{})
 
 	tests := []struct {
 		name string

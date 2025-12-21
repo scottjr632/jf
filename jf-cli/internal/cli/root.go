@@ -29,7 +29,7 @@ func newRootCommand() *cobra.Command {
 
 	cmd.AddCommand(
 		newListCmd(opts),
-		newAddCmd(opts),
+		newNewCmd(opts),
 		newCheckoutCmd(opts),
 		newMainCmd(opts),
 		newMergeCmd(opts),
