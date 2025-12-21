@@ -19,6 +19,22 @@ func List(ctx context.Context, repo string) (string, error) {
 	return runGit(ctx, repo, "worktree", "list")
 }
 
+// Entry describes a git worktree entry from `git worktree list --porcelain`.
+type Entry struct {
+	Path     string
+	Branch   string
+	Detached bool
+}
+
+// ListEntries returns parsed worktree entries from `git worktree list --porcelain`.
+func ListEntries(ctx context.Context, repo string) ([]Entry, error) {
+	output, err := runGit(ctx, repo, "worktree", "list", "--porcelain")
+	if err != nil {
+		return nil, err
+	}
+	return parseWorktreeEntries(output), nil
+}
+
 // Add creates a new worktree at path, optionally checking out ref.
 func Add(ctx context.Context, repo, path, ref string) (string, error) {
 	resolvedPath, err := resolveWorktreePath(ctx, repo, path)
@@ -229,4 +245,42 @@ func stringSliceContains(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func parseWorktreeEntries(output string) []Entry {
+	lines := strings.Split(output, "\n")
+	var entries []Entry
+	var current *Entry
+
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "worktree ") {
+			if current != nil {
+				entries = append(entries, *current)
+			}
+			path := strings.TrimSpace(strings.TrimPrefix(line, "worktree "))
+			current = &Entry{Path: path}
+			continue
+		}
+		if current == nil {
+			continue
+		}
+		if strings.HasPrefix(line, "branch ") {
+			ref := strings.TrimSpace(strings.TrimPrefix(line, "branch "))
+			current.Branch = strings.TrimPrefix(ref, "refs/heads/")
+			continue
+		}
+		if line == "detached" {
+			current.Detached = true
+		}
+	}
+
+	if current != nil {
+		entries = append(entries, *current)
+	}
+
+	return entries
 }

@@ -31,6 +31,30 @@ func TestListUsesGitWorktreeList(t *testing.T) {
 	}
 }
 
+func TestListEntriesParsesPorcelain(t *testing.T) {
+	original := runGit
+	defer func() { runGit = original }()
+
+	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
+		if !reflect.DeepEqual(args, []string{"worktree", "list", "--porcelain"}) {
+			t.Fatalf("expected args %v, got %v", []string{"worktree", "list", "--porcelain"}, args)
+		}
+		return "worktree /tmp/main\nHEAD 123\nbranch refs/heads/main\n\nworktree /tmp/feature\nHEAD 456\ndetached\n", nil
+	}
+
+	entries, err := ListEntries(context.Background(), "/repo")
+	if err != nil {
+		t.Fatalf("ListEntries returned error: %v", err)
+	}
+	want := []Entry{
+		{Path: "/tmp/main", Branch: "main"},
+		{Path: "/tmp/feature", Detached: true},
+	}
+	if !reflect.DeepEqual(entries, want) {
+		t.Fatalf("expected entries %v, got %v", want, entries)
+	}
+}
+
 func TestAddUsesGitWorktreeAdd(t *testing.T) {
 	original := runGit
 	defer func() { runGit = original }()

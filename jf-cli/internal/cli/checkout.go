@@ -1,10 +1,14 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 
 	"github.com/scottjr632/jf-cli/internal/worktree"
 	"github.com/spf13/cobra"
@@ -14,19 +18,29 @@ func newCheckoutCmd(opts *rootOptions) *cobra.Command {
 	var shell string
 
 	cmd := &cobra.Command{
-		Use:     "checkout <path|name>",
+		Use:     "checkout [path|name]",
 		Short:   "Open a worktree in a subshell",
 		Aliases: []string{"co"},
 		Args: func(_ *cobra.Command, args []string) error {
-			if len(args) != 1 {
-				return fmt.Errorf("expected <path|name>")
+			if len(args) > 1 {
+				return fmt.Errorf("expected [path|name]")
 			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path, err := worktree.ResolvePath(cmd.Context(), opts.repo, args[0])
-			if err != nil {
-				return err
+			var path string
+			if len(args) == 0 {
+				selected, err := promptWorktreeSelection(cmd.Context(), opts.repo)
+				if err != nil {
+					return err
+				}
+				path = selected
+			} else {
+				resolved, err := worktree.ResolvePath(cmd.Context(), opts.repo, args[0])
+				if err != nil {
+					return err
+				}
+				path = resolved
 			}
 			if err := ensureDir(path); err != nil {
 				return err
@@ -38,6 +52,54 @@ func newCheckoutCmd(opts *rootOptions) *cobra.Command {
 	cmd.Flags().StringVar(&shell, "shell", "", "Shell to launch (defaults to $SHELL)")
 
 	return cmd
+}
+
+func promptWorktreeSelection(ctx context.Context, repo string) (string, error) {
+	entries, err := worktree.ListEntries(ctx, repo)
+	if err != nil {
+		return "", err
+	}
+	if len(entries) == 0 {
+		return "", fmt.Errorf("no worktrees found")
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Fprintln(os.Stdout, "Select a worktree:")
+		for i, entry := range entries {
+			fmt.Fprintf(os.Stdout, "  %d) %s\n", i+1, formatWorktreeEntry(entry))
+		}
+		fmt.Fprint(os.Stdout, "Enter number: ")
+
+		text, err := reader.ReadString('\n')
+		if err != nil && len(text) == 0 {
+			return "", err
+		}
+		trimmed := strings.TrimSpace(text)
+		if trimmed == "" {
+			if err == io.EOF {
+				return "", err
+			}
+			continue
+		}
+		index, convErr := strconv.Atoi(trimmed)
+		if convErr != nil || index < 1 || index > len(entries) {
+			fmt.Fprintln(os.Stdout, "Invalid selection.")
+			if err == io.EOF {
+				return "", err
+			}
+			continue
+		}
+		return entries[index-1].Path, nil
+	}
+}
+
+func formatWorktreeEntry(entry worktree.Entry) string {
+	label := "detached"
+	if entry.Branch != "" {
+		label = entry.Branch
+	}
+	return fmt.Sprintf("%s (%s)", label, entry.Path)
 }
 
 func enterShell(ctx context.Context, dir, shell string) error {
