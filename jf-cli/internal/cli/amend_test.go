@@ -54,9 +54,11 @@ func TestParseAmendArgs(t *testing.T) {
 			want: amendArgs{},
 		},
 		{
-			name:    "missing-worktree-value",
-			args:    []string{"--worktree"},
-			wantErr: true,
+			name: "missing-worktree-value",
+			args: []string{"--worktree"},
+			want: amendArgs{
+				promptWorktree: true,
+			},
 		},
 	}
 
@@ -71,7 +73,7 @@ func TestParseAmendArgs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("case %s: unexpected error: %v", tc.name, err)
 		}
-		if got.edit != tc.want.edit || got.worktree != tc.want.worktree || !reflect.DeepEqual(got.gitArgs, tc.want.gitArgs) {
+		if got.edit != tc.want.edit || got.worktree != tc.want.worktree || got.promptWorktree != tc.want.promptWorktree || !reflect.DeepEqual(got.gitArgs, tc.want.gitArgs) {
 			t.Fatalf("case %s: expected %#v, got %#v", tc.name, tc.want, got)
 		}
 	}

@@ -31,7 +31,7 @@ func TestRemoveArgsValidation(t *testing.T) {
 		args []string
 		want bool
 	}{
-		{name: "missing", args: []string{}, want: false},
+		{name: "missing", args: []string{}, want: true},
 		{name: "one", args: []string{"path"}, want: true},
 		{name: "two", args: []string{"a", "b"}, want: false},
 	}

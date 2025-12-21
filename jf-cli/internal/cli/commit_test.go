@@ -49,9 +49,11 @@ func TestParseCommitArgs(t *testing.T) {
 			want: commitArgs{},
 		},
 		{
-			name:    "missing-worktree-value",
-			args:    []string{"--worktree"},
-			wantErr: true,
+			name: "missing-worktree-value",
+			args: []string{"--worktree"},
+			want: commitArgs{
+				promptWorktree: true,
+			},
 		},
 	}
 
@@ -66,7 +68,7 @@ func TestParseCommitArgs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("case %s: unexpected error: %v", tc.name, err)
 		}
-		if got.amend != tc.want.amend || got.worktree != tc.want.worktree || !reflect.DeepEqual(got.gitArgs, tc.want.gitArgs) {
+		if got.amend != tc.want.amend || got.worktree != tc.want.worktree || got.promptWorktree != tc.want.promptWorktree || !reflect.DeepEqual(got.gitArgs, tc.want.gitArgs) {
 			t.Fatalf("case %s: expected %#v, got %#v", tc.name, tc.want, got)
 		}
 	}

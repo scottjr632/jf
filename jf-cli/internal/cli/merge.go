@@ -14,12 +14,19 @@ func newMergeCmd(opts *rootOptions) *cobra.Command {
 		Use:   "merge <path|name>",
 		Short: "Merge a worktree branch into another branch",
 		Args: func(_ *cobra.Command, args []string) error {
-			if len(args) != 1 {
+			if len(args) > 1 {
 				return errors.New("expected <path|name>")
 			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				selection, err := promptWorktreeSelection(cmd.Context(), opts.repo)
+				if err != nil {
+					return err
+				}
+				args = []string{selection}
+			}
 			path, err := worktree.ResolvePath(cmd.Context(), opts.repo, args[0])
 			if err != nil {
 				return err
