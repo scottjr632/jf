@@ -11,7 +11,10 @@ func TestShouldPassthrough(t *testing.T) {
 		want bool
 	}{
 		{name: "empty", args: []string{}, want: false},
+		{name: "worktree", args: []string{"worktree"}, want: false},
+		{name: "worktree-alias", args: []string{"w"}, want: false},
 		{name: "list", args: []string{"list"}, want: false},
+		{name: "new", args: []string{"new"}, want: false},
 		{name: "main", args: []string{"main"}, want: false},
 		{name: "ls", args: []string{"ls"}, want: false},
 		{name: "log-long", args: []string{"log-long"}, want: false},

@@ -13,26 +13,27 @@ go build ./...
 Worktree commands:
 
 ```sh
-jf list
-jf new <path|name> [ref]
-jf checkout <path|name>
-jf main
-jf merge <path|name> [--into <branch>]
-jf commit [--amend] [--worktree <path|name>] [-- <git commit args...>]
-jf amend [--edit] [--worktree <path|name>] [-- <git commit args...>]
-jf pr
-jf remove <path|name>
-jf prune
+jf worktree list
+jf worktree new <path|name> [ref]
+jf worktree checkout <path|name>
+jf worktree main
+jf worktree merge <path|name> [--into <branch>]
+jf worktree commit [--amend] [--worktree <path|name>] [-- <git commit args...>]
+jf worktree amend [--edit] [--worktree <path|name>] [-- <git commit args...>]
+jf worktree remove <path|name>
+jf worktree prune
 ```
 
-`jf commit` runs `git add -p` and then prompts to add untracked files before committing.
-`jf amend` uses the same staging flow and defaults to `--no-edit` unless you pass `--edit`.
+`jf w` is an alias for `jf worktree`.
+
+`jf worktree commit` runs `git add -p` and then prompts to add untracked files before committing.
+`jf amend` and `jf worktree amend` use the same staging flow and default to `--no-edit` unless you pass `--edit`.
 
 When you pass a relative path that does not start with `./` or `../`, `jf`
 stores worktrees under `~/.jf/<repo>/worktrees/<name>`. Use `./path` or an
 absolute path to opt out.
 
-`jf new` opens a subshell in the new worktree by default. Use
+`jf worktree new` opens a subshell in the new worktree by default. Use
 `--no-checkout` to skip that behavior.
 
 Stacked commits:

@@ -28,25 +28,18 @@ func newRootCommand() *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&opts.repo, "repo", "C", "", "Path to the target Git repository (defaults to current dir)")
 
 	cmd.AddCommand(
-		newListCmd(opts),
-		newNewCmd(opts),
-		newCheckoutCmd(opts),
-		newMainCmd(opts),
+		newWorktreeCmd(opts),
 		newLsCmd(opts),
 		newLogLongCmd(opts),
 		newNextCmd(opts),
 		newPrevCmd(opts),
-		newMergeCmd(opts),
-		newCommitCmd(opts),
-		newAmendCmd(opts),
 		newPrOpenCmd(opts),
+		newAmendCmd(opts),
 		newTrunkCmd(opts),
 		newStackCmd(opts),
 		newSyncCmd(opts),
 		newRestackCmd(opts),
 		newSubmitCmd(opts),
-		newRemoveCmd(opts),
-		newPruneCmd(opts),
 		newGitCmd(opts),
 	)
 
@@ -143,6 +136,9 @@ func isJFCommand(cmd *cobra.Command, name string) bool {
 			if alias == name {
 				return true
 			}
+		}
+		if isJFCommand(sub, name) {
+			return true
 		}
 	}
 	return false
