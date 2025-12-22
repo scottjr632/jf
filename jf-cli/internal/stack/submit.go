@@ -104,7 +104,7 @@ func SubmitCurrent(ctx context.Context, repo string, cfg Config, opts SubmitOpti
 			Body:    meta.Body,
 		}
 		position := i + 1
-		branch := branchNameForCommit(opts.BranchPrefix, i+1, commit)
+		branch := BranchNameForCommit(opts.BranchPrefix, i+1, commit)
 		if err := createOrUpdateBranch(ctx, repo, branch, commit.SHA); err != nil {
 			return nil, err
 		}
@@ -233,7 +233,7 @@ func commitBody(commit Commit) string {
 	return commitTitle(commit)
 }
 
-func branchNameForCommit(prefix string, index int, commit Commit) string {
+func BranchNameForCommit(prefix string, index int, commit Commit) string {
 	cleanPrefix := strings.Trim(prefix, "/")
 	if cleanPrefix == "" {
 		cleanPrefix = defaultBranchPrefix
