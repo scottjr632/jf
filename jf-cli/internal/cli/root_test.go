@@ -14,6 +14,8 @@ func TestShouldPassthrough(t *testing.T) {
 		{name: "list", args: []string{"list"}, want: false},
 		{name: "main", args: []string{"main"}, want: false},
 		{name: "ls", args: []string{"ls"}, want: false},
+		{name: "log-long", args: []string{"log-long"}, want: false},
+		{name: "ll", args: []string{"ll"}, want: false},
 		{name: "next", args: []string{"next"}, want: false},
 		{name: "prev", args: []string{"prev"}, want: false},
 		{name: "commit", args: []string{"commit"}, want: false},

@@ -158,3 +158,8 @@ func repoRoot(ctx context.Context, repo string) (string, error) {
 	}
 	return root, nil
 }
+
+// RepoRoot returns the repository root directory.
+func RepoRoot(ctx context.Context, repo string) (string, error) {
+	return repoRoot(ctx, repo)
+}
