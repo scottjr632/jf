@@ -45,3 +45,12 @@ func PRForBranch(ctx context.Context, repoRoot, branch string) (*PRStatus, error
 		Title:  pr.Title,
 	}, nil
 }
+
+// OpenPR opens a PR in a browser using gh.
+func OpenPR(ctx context.Context, repoRoot string, number int) error {
+	if number == 0 {
+		return fmt.Errorf("missing PR number")
+	}
+	_, err := runGh(ctx, repoRoot, "pr", "view", fmt.Sprintf("%d", number), "--web")
+	return err
+}

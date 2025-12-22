@@ -20,6 +20,7 @@ func TestShouldPassthrough(t *testing.T) {
 		{name: "prev", args: []string{"prev"}, want: false},
 		{name: "commit", args: []string{"commit"}, want: false},
 		{name: "amend", args: []string{"amend"}, want: false},
+		{name: "pr", args: []string{"pr"}, want: false},
 		{name: "trunk", args: []string{"trunk"}, want: false},
 		{name: "stack", args: []string{"stack"}, want: false},
 		{name: "sync", args: []string{"sync"}, want: false},
