@@ -44,6 +44,19 @@ type prInfo struct {
 	Title       string `json:"title"`
 }
 
+type stackPR struct {
+	Number   int
+	Title    string
+	Position int
+}
+
+type prComment struct {
+	ID   int    `json:"id"`
+	Body string `json:"body"`
+}
+
+const stackCommentMarker = "<!-- jf-stack-info -->"
+
 // SubmitCurrent creates or updates PRs for the current stack.
 func SubmitCurrent(ctx context.Context, repo string, cfg Config, opts SubmitOptions) ([]SubmitResult, error) {
 	applyDefaults(&cfg)
@@ -76,6 +89,7 @@ func SubmitCurrent(ctx context.Context, repo string, cfg Config, opts SubmitOpti
 	}
 
 	results := make([]SubmitResult, 0, len(resolved.stack.Order))
+	stackPRs := make([]stackPR, 0, len(resolved.stack.Order))
 	base := resolved.effectiveTrunk
 
 	for i, id := range resolved.stack.Order {
@@ -117,9 +131,6 @@ func SubmitCurrent(ctx context.Context, repo string, cfg Config, opts SubmitOpti
 			if pr == nil {
 				return nil, fmt.Errorf("created PR for %q but could not find it", branch)
 			}
-			if err := addStackComment(ctx, root, pr.Number, resolved.name, Stack{Trunk: resolved.effectiveTrunk, Head: resolved.headRef}, position, len(resolved.stack.Order)); err != nil {
-				return nil, err
-			}
 			result.Number = pr.Number
 			result.Action = SubmitCreated
 		} else {
@@ -144,8 +155,13 @@ func SubmitCurrent(ctx context.Context, repo string, cfg Config, opts SubmitOpti
 			}
 		}
 
+		stackPRs = append(stackPRs, stackPR{Number: pr.Number, Title: title, Position: position})
 		results = append(results, result)
 		base = branch
+	}
+
+	if err := updateStackComments(ctx, root, resolved.name, Stack{Trunk: resolved.effectiveTrunk, Head: resolved.headRef}, stackPRs); err != nil {
+		return nil, err
 	}
 
 	return results, nil
@@ -203,19 +219,6 @@ func updatePRTitle(ctx context.Context, repoRoot string, number int, title strin
 	return err
 }
 
-func addStackComment(ctx context.Context, repoRoot string, number int, stackName string, stackInfo Stack, position, total int) error {
-	if number == 0 {
-		return fmt.Errorf("missing PR number")
-	}
-	name := strings.TrimSpace(stackName)
-	if name == "" {
-		name = stackInfo.Head
-	}
-	message := fmt.Sprintf("Stack: %s (trunk: %s) [%d/%d]", name, stackInfo.Trunk, position, total)
-	_, err := runGh(ctx, repoRoot, "pr", "comment", fmt.Sprintf("%d", number), "--body", message)
-	return err
-}
-
 func commitTitle(commit Commit) string {
 	if strings.TrimSpace(commit.Subject) != "" {
 		return commit.Subject
@@ -252,4 +255,97 @@ func slugify(input string) string {
 	replaced := slugPattern.ReplaceAllString(lower, "-")
 	replaced = strings.Trim(replaced, "-")
 	return replaced
+}
+
+func updateStackComments(ctx context.Context, repoRoot string, stackName string, stackInfo Stack, prs []stackPR) error {
+	if len(prs) == 0 {
+		return nil
+	}
+	repoName, err := repoNameWithOwner(ctx, repoRoot)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(repoName) == "" {
+		return fmt.Errorf("missing repo name")
+	}
+	total := len(prs)
+	for _, pr := range prs {
+		message := stackCommentBody(stackName, stackInfo, pr.Position, total, prs)
+		if err := upsertStackComment(ctx, repoRoot, repoName, pr.Number, message); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func repoNameWithOwner(ctx context.Context, repoRoot string) (string, error) {
+	out, err := runGh(ctx, repoRoot, "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
+func stackCommentBody(stackName string, stackInfo Stack, position, total int, prs []stackPR) string {
+	name := strings.TrimSpace(stackName)
+	if name == "" {
+		name = stackInfo.Head
+	}
+	var builder strings.Builder
+	builder.WriteString(stackCommentMarker)
+	builder.WriteString("\n")
+	fmt.Fprintf(&builder, "Stack: %s (trunk: %s) [%d/%d]\n\n", name, stackInfo.Trunk, position, total)
+	builder.WriteString("PRs:\n")
+	for _, pr := range prs {
+		line := fmt.Sprintf("%d. #%d - %s", pr.Position, pr.Number, strings.TrimSpace(pr.Title))
+		if pr.Position == position {
+			line += " (current)"
+		}
+		builder.WriteString(line)
+		builder.WriteString("\n")
+	}
+	return strings.TrimSpace(builder.String())
+}
+
+func upsertStackComment(ctx context.Context, repoRoot, repoName string, number int, message string) error {
+	if number == 0 {
+		return fmt.Errorf("missing PR number")
+	}
+	commentID, err := findStackCommentID(ctx, repoRoot, repoName, number)
+	if err != nil {
+		return err
+	}
+	if commentID != 0 {
+		return updateStackComment(ctx, repoRoot, repoName, commentID, message)
+	}
+	_, err = runGh(ctx, repoRoot, "pr", "comment", fmt.Sprintf("%d", number), "--body", message)
+	return err
+}
+
+func findStackCommentID(ctx context.Context, repoRoot, repoName string, number int) (int, error) {
+	if strings.TrimSpace(repoName) == "" {
+		return 0, fmt.Errorf("missing repo name")
+	}
+	out, err := runGh(ctx, repoRoot, "api", fmt.Sprintf("repos/%s/issues/%d/comments", repoName, number))
+	if err != nil {
+		return 0, err
+	}
+	var comments []prComment
+	if err := json.Unmarshal([]byte(out), &comments); err != nil {
+		return 0, fmt.Errorf("parse gh output: %w", err)
+	}
+	for _, comment := range comments {
+		if strings.Contains(comment.Body, stackCommentMarker) {
+			return comment.ID, nil
+		}
+	}
+	return 0, nil
+}
+
+func updateStackComment(ctx context.Context, repoRoot, repoName string, commentID int, message string) error {
+	if commentID == 0 {
+		return fmt.Errorf("missing comment id")
+	}
+	_, err := runGh(ctx, repoRoot, "api", "-X", "PATCH", fmt.Sprintf("repos/%s/issues/comments/%d", repoName, commentID), "-f", "body="+message)
+	return err
 }
