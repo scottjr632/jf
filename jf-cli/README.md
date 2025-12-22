@@ -20,6 +20,7 @@ jf main
 jf merge <path|name> [--into <branch>]
 jf commit [--amend] [--worktree <path|name>] [-- <git commit args...>]
 jf amend [--edit] [--worktree <path|name>] [-- <git commit args...>]
+jf pr
 jf remove <path|name>
 jf prune
 ```
@@ -39,6 +40,7 @@ Stacked commits:
 ```sh
 jf ls
 jf log-long
+jf pr
 jf trunk [branch]
 jf sync
 jf submit
@@ -68,6 +70,9 @@ jf ll
 jf submit
  or 
 jf ls
+
+# Open the current PR in your browser
+jf pr
 
 # Override trunk for a one-off stack listing
 jf ls --trunk release
