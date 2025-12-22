@@ -119,6 +119,9 @@ func RecordAmend(ctx context.Context, repo string, cfg *Config, trunkOverride st
 
 	amendedID := commitIDForSHA(resolved.stack, origSHA)
 	if amendedID == "" {
+		amendedID = commitIDForSHA(resolved.stack, headCommit.SHA)
+	}
+	if amendedID == "" {
 		return SyncCurrent(ctx, repo, cfg, trunkOverride)
 	}
 
@@ -127,9 +130,6 @@ func RecordAmend(ctx context.Context, repo string, cfg *Config, trunkOverride st
 
 	amendedIndex := indexOfStackID(resolved.stack.Order, amendedID)
 	if amendedIndex != -1 && amendedIndex < len(resolved.stack.Order)-1 {
-		if resolved.stackHead == "HEAD" {
-			return fmt.Errorf("cannot rebase descendants without a branch containing HEAD")
-		}
 		if err := rebaseDescendants(ctx, repo, origSHA, headCommit.SHA, resolved.stackHead); err != nil {
 			return err
 		}
@@ -251,6 +251,9 @@ func findContainingBranch(ctx context.Context, repo, trunk string) (string, erro
 	for _, line := range lines {
 		name := strings.TrimSpace(line)
 		if name == "" {
+			continue
+		}
+		if name == "HEAD" || strings.HasPrefix(name, "(") || strings.Contains(name, "detached") {
 			continue
 		}
 		candidates = append(candidates, name)

@@ -24,6 +24,7 @@ func TestShouldPassthrough(t *testing.T) {
 		{name: "trunk", args: []string{"trunk"}, want: false},
 		{name: "stack", args: []string{"stack"}, want: false},
 		{name: "sync", args: []string{"sync"}, want: false},
+		{name: "restack", args: []string{"restack"}, want: false},
 		{name: "submit", args: []string{"submit"}, want: false},
 		{name: "help", args: []string{"help"}, want: false},
 		{name: "help-flag", args: []string{"--help"}, want: false},

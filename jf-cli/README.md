@@ -43,6 +43,7 @@ jf log-long
 jf pr
 jf trunk [branch]
 jf sync
+jf restack
 jf submit
 jf next
 jf prev
@@ -52,6 +53,7 @@ jf stack status
 `jf ls` shows commits between trunk and HEAD as the current stack.
 `jf log-long` shows stack commits with PR status details.
 `jf submit` creates or updates one PR per commit using the `gh` CLI.
+`jf restack` ensures stack commits are rebased in order on top of trunk.
 Stack metadata (trunk, stacks, and current commit pointer) lives in `.jf/stack.json`.
 
 Examples:
@@ -79,6 +81,9 @@ jf ls --trunk release
 
 # Refresh stack metadata after manual git history edits
 jf sync
+
+# Restack commits onto trunk if needed
+jf restack
 
 # Show current stack metadata
 jf stack status
