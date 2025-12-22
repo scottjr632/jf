@@ -10,6 +10,13 @@ go build ./...
 
 ## Usage
 
+Core commands:
+
+```sh
+jf commit [--amend] [--worktree <path|name>] [-- <git commit args...>]
+jf amend [--edit] [--worktree <path|name>] [-- <git commit args...>]
+```
+
 Worktree commands:
 
 ```sh
@@ -18,7 +25,6 @@ jf worktree new <path|name> [ref]
 jf worktree checkout <path|name>
 jf worktree main
 jf worktree merge <path|name> [--into <branch>]
-jf worktree commit [--amend] [--worktree <path|name>] [-- <git commit args...>]
 jf worktree amend [--edit] [--worktree <path|name>] [-- <git commit args...>]
 jf worktree remove <path|name>
 jf worktree prune
@@ -26,7 +32,7 @@ jf worktree prune
 
 `jf w` is an alias for `jf worktree`.
 
-`jf worktree commit` runs `git add -p` and then prompts to add untracked files before committing.
+`jf commit` runs `git add -p` and then prompts to add untracked files before committing.
 `jf amend` and `jf worktree amend` use the same staging flow and default to `--no-edit` unless you pass `--edit`.
 
 `jf status` shows `git status` along with worktree and stack metadata.

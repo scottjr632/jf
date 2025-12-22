@@ -30,6 +30,7 @@ func newRootCommand() *cobra.Command {
 	cmd.AddCommand(
 		newWorktreeCmd(opts),
 		newStatusCmd(opts),
+		newCommitCmd(opts),
 		newLsCmd(opts),
 		newLogLongCmd(opts),
 		newNextCmd(opts),

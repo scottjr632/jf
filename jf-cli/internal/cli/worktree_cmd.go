@@ -15,7 +15,6 @@ func newWorktreeCmd(opts *rootOptions) *cobra.Command {
 		newCheckoutCmd(opts),
 		newMainCmd(opts),
 		newMergeCmd(opts),
-		newCommitCmd(opts),
 		newAmendCmd(opts),
 		newRemoveCmd(opts),
 		newPruneCmd(opts),
