@@ -43,6 +43,7 @@ jf sync
 jf submit
 jf next
 jf prev
+jf stack status
 ```
 
 `jf ls` shows commits between trunk and HEAD as the current stack.
@@ -66,6 +67,9 @@ jf ls --trunk release
 
 # Refresh stack metadata after manual git history edits
 jf sync
+
+# Show current stack metadata
+jf stack status
 
 # Walk commit stack
 jf next
