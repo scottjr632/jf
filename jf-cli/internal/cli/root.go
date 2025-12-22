@@ -43,6 +43,7 @@ func newRootCommand() *cobra.Command {
 		newTrunkCmd(opts),
 		newStackCmd(opts),
 		newSyncCmd(opts),
+		newRestackCmd(opts),
 		newSubmitCmd(opts),
 		newRemoveCmd(opts),
 		newPruneCmd(opts),
