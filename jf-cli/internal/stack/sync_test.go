@@ -18,7 +18,7 @@ func TestSyncStackRefreshesCommits(t *testing.T) {
 		mkdirAll = originalMkdir
 	}()
 
-	format := "%H%x1f%h%x1f%s%x1f%b%x1e"
+	format := "%H%x1f%P%x1f%h%x1f%s%x1f%b%x1e"
 
 	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
 		joined := strings.Join(args, " ")
@@ -31,8 +31,8 @@ func TestSyncStackRefreshesCommits(t *testing.T) {
 			return "", nil
 		case "merge-base --is-ancestor main feature":
 			return "", nil
-		case "log --reverse --format=" + format + " main..feature":
-			return "newsha\x1fnewsha\x1fNew\x1f\x1e", nil
+		case "log --reverse --topo-order --format=" + format + " main..feature":
+			return "newsha\x1ftrunksha\x1fnewsha\x1fNew\x1f\x1e", nil
 		case "rev-parse HEAD":
 			return "newsha\n", nil
 		case "rev-parse --verify ORIG_HEAD":

@@ -55,7 +55,7 @@ func TestRestackNoopWhenAligned(t *testing.T) {
 		Order: []string{"id-1", "id-2"},
 		Commits: map[string]CommitMeta{
 			"id-1": {SHA: "sha1", Subject: "First", Body: ""},
-			"id-2": {SHA: "sha2", Subject: "Second", Body: ""},
+			"id-2": {SHA: "sha2", Subject: "Second", Body: "", Parent: "id-1"},
 		},
 		Current: "id-2",
 	}
@@ -77,7 +77,7 @@ func TestRestackRebasesWhenParentMismatch(t *testing.T) {
 		mkdirAll = originalMkdir
 	}()
 
-	format := "%H%x1f%h%x1f%s%x1f%b%x1e"
+	format := "%H%x1f%P%x1f%h%x1f%s%x1f%b%x1e"
 
 	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
 		joined := strings.Join(args, " ")
@@ -96,9 +96,9 @@ func TestRestackRebasesWhenParentMismatch(t *testing.T) {
 			return "trunksha\n", nil
 		case "rev-parse sha2^":
 			return "trunksha\n", nil
-		case "log --reverse --format=" + format + " main..feature":
-			return "newsha1\x1fnewsha1\x1fFirst\x1f\x1e" +
-				"newsha2\x1fnewsha2\x1fSecond\x1f\x1e", nil
+		case "log --reverse --topo-order --format=" + format + " main..feature":
+			return "newsha1\x1ftrunksha\x1fnewsha1\x1fFirst\x1f\x1e" +
+				"newsha2\x1fnewsha1\x1fnewsha2\x1fSecond\x1f\x1e", nil
 		default:
 			return "", errors.New("unexpected git call")
 		}
@@ -123,7 +123,7 @@ func TestRestackRebasesWhenParentMismatch(t *testing.T) {
 		Order: []string{"id-1", "id-2"},
 		Commits: map[string]CommitMeta{
 			"id-1": {SHA: "sha1", Subject: "First", Body: ""},
-			"id-2": {SHA: "sha2", Subject: "Second", Body: ""},
+			"id-2": {SHA: "sha2", Subject: "Second", Body: "", Parent: "id-1"},
 		},
 		Current: "id-2",
 	}

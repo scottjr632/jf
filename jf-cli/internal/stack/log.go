@@ -6,10 +6,15 @@ import (
 	"strings"
 )
 
-func listCommitsRange(ctx context.Context, repo, trunk, head string) ([]Commit, error) {
-	format := "%H%x1f%h%x1f%s%x1f%b%x1e"
+type commitNode struct {
+	Commit  Commit
+	Parents []string
+}
+
+func listCommitsRange(ctx context.Context, repo, trunk, head string) ([]commitNode, error) {
+	format := "%H%x1f%P%x1f%h%x1f%s%x1f%b%x1e"
 	rangeSpec := trunk + ".." + head
-	out, err := runGit(ctx, repo, "log", "--reverse", "--format="+format, rangeSpec)
+	out, err := runGit(ctx, repo, "log", "--reverse", "--topo-order", "--format="+format, rangeSpec)
 	if err != nil {
 		return nil, err
 	}
@@ -18,22 +23,26 @@ func listCommitsRange(ctx context.Context, repo, trunk, head string) ([]Commit, 
 	}
 
 	records := strings.Split(out, "\x1e")
-	commits := make([]Commit, 0, len(records))
+	commits := make([]commitNode, 0, len(records))
 	for _, record := range records {
 		record = strings.TrimSpace(record)
 		if record == "" {
 			continue
 		}
 		fields := strings.Split(record, "\x1f")
-		if len(fields) < 4 {
+		if len(fields) < 5 {
 			return nil, fmt.Errorf("unexpected git log output")
 		}
-		body := strings.TrimSpace(fields[3])
-		commits = append(commits, Commit{
-			SHA:     strings.TrimSpace(fields[0]),
-			Short:   strings.TrimSpace(fields[1]),
-			Subject: strings.TrimSpace(fields[2]),
-			Body:    body,
+		body := strings.TrimSpace(fields[4])
+		parents := strings.Fields(strings.TrimSpace(fields[1]))
+		commits = append(commits, commitNode{
+			Commit: Commit{
+				SHA:     strings.TrimSpace(fields[0]),
+				Short:   strings.TrimSpace(fields[2]),
+				Subject: strings.TrimSpace(fields[3]),
+				Body:    body,
+			},
+			Parents: parents,
 		})
 	}
 

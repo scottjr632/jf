@@ -27,8 +27,9 @@ type Stack struct {
 
 // StackItem describes a stack commit with its stable id.
 type StackItem struct {
-	ID     string
-	Commit Commit
+	ID       string
+	ParentID string
+	Commit   Commit
 }
 
 // StackDetails represents the current stack with stable ids.
@@ -36,6 +37,7 @@ type StackDetails struct {
 	Trunk string
 	Head  string
 	Items []StackItem
+	CurrentID string
 }
 
 // CurrentStack returns commits for the current stack using metadata.
@@ -87,14 +89,16 @@ func CurrentStackDetails(ctx context.Context, repo string, cfg *Config, trunkOve
 		headLabel = label
 	}
 
-	items := make([]StackItem, 0, len(resolved.stack.Order))
-	for _, id := range resolved.stack.Order {
+	order := stackOrder(resolved.stack)
+	items := make([]StackItem, 0, len(order))
+	for _, id := range order {
 		meta, ok := resolved.stack.Commits[id]
 		if !ok {
 			continue
 		}
 		items = append(items, StackItem{
-			ID: id,
+			ID:       id,
+			ParentID: strings.TrimSpace(meta.Parent),
 			Commit: Commit{
 				SHA:     meta.SHA,
 				Short:   shortSHA(meta.SHA),
@@ -105,9 +109,10 @@ func CurrentStackDetails(ctx context.Context, repo string, cfg *Config, trunkOve
 	}
 
 	return StackDetails{
-		Trunk: resolved.effectiveTrunk,
-		Head:  headLabel,
-		Items: items,
+		Trunk:     resolved.effectiveTrunk,
+		Head:      headLabel,
+		Items:     items,
+		CurrentID: resolved.stack.Current,
 	}, nil
 }
 
@@ -145,8 +150,16 @@ func RecordCommit(ctx context.Context, repo string, cfg *Config, trunkOverride s
 	if err != nil {
 		return err
 	}
+	parentSHA, err := firstParentSHA(ctx, repo, commit.SHA)
+	if err != nil {
+		return err
+	}
+	parentID := ""
+	if parentSHA != "" {
+		parentID = commitIDForSHA(resolved.stack, parentSHA)
+	}
 	resolved.stack.Order = append(resolved.stack.Order, id)
-	resolved.stack.Commits[id] = CommitMeta{SHA: commit.SHA, Subject: commit.Subject, Body: commit.Body}
+	resolved.stack.Commits[id] = CommitMeta{SHA: commit.SHA, Subject: commit.Subject, Body: commit.Body, Parent: parentID}
 	resolved.stack.Current = id
 	resolved.changed = true
 	cfg.Stacks[resolved.name] = resolved.stack
@@ -186,8 +199,9 @@ func RecordAmend(ctx context.Context, repo string, cfg *Config, trunkOverride st
 	resolved.stack.Commits[amendedID] = CommitMeta{SHA: headCommit.SHA, Subject: headCommit.Subject, Body: headCommit.Body}
 	resolved.stack.Current = amendedID
 
-	amendedIndex := indexOfStackID(resolved.stack.Order, amendedID)
-	if amendedIndex != -1 && amendedIndex < len(resolved.stack.Order)-1 {
+	order := stackOrder(resolved.stack)
+	amendedIndex := indexOfStackID(order, amendedID)
+	if amendedIndex != -1 && amendedIndex < len(order)-1 {
 		if err := rebaseDescendants(ctx, repo, origSHA, headCommit.SHA, resolved.stackHead); err != nil {
 			return err
 		}
@@ -260,6 +274,21 @@ func resolveOptionalSHA(ctx context.Context, repo, ref string) (string, error) {
 	}
 	sha := strings.TrimSpace(out)
 	return sha, nil
+}
+
+func firstParentSHA(ctx context.Context, repo, sha string) (string, error) {
+	if strings.TrimSpace(sha) == "" {
+		return "", fmt.Errorf("commit sha is required")
+	}
+	out, err := runGit(ctx, repo, "log", "-1", "--format=%P", sha)
+	if err != nil {
+		return "", err
+	}
+	parents := strings.Fields(strings.TrimSpace(out))
+	if len(parents) == 0 {
+		return "", nil
+	}
+	return parents[0], nil
 }
 
 func readCommit(ctx context.Context, repo, ref string) (Commit, error) {

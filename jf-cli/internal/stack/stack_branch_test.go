@@ -18,7 +18,7 @@ func TestCurrentStackReusesCommitIDsFromCurrentStack(t *testing.T) {
 		mkdirAll = originalMkdir
 	}()
 
-	format := "%H%x1f%h%x1f%s%x1f%b%x1e"
+	format := "%H%x1f%P%x1f%h%x1f%s%x1f%b%x1e"
 	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
 		joined := strings.Join(args, " ")
 		switch joined {
@@ -30,9 +30,9 @@ func TestCurrentStackReusesCommitIDsFromCurrentStack(t *testing.T) {
 			return "shaD\n", nil
 		case "rev-parse --verify ORIG_HEAD":
 			return "", errors.New("missing")
-		case "log --reverse --format=" + format + " main..feature2":
-			return "shaA\x1fshaA\x1fFirst\x1f\x1e" +
-				"shaD\x1fshaD\x1fSecond\x1f\x1e", nil
+		case "log --reverse --topo-order --format=" + format + " main..feature2":
+			return "shaA\x1ftrunksha\x1fshaA\x1fFirst\x1f\x1e" +
+				"shaD\x1fshaA\x1fshaD\x1fSecond\x1f\x1e", nil
 		default:
 			return "", errors.New("unexpected git call")
 		}

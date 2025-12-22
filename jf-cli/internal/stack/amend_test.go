@@ -72,7 +72,7 @@ func TestRecordAmendRebasesDescendants(t *testing.T) {
 		mkdirAll = originalMkdir
 	}()
 
-	format := "%H%x1f%h%x1f%s%x1f%b%x1e"
+	format := "%H%x1f%P%x1f%h%x1f%s%x1f%b%x1e"
 
 	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
 		switch {
@@ -88,9 +88,9 @@ func TestRecordAmendRebasesDescendants(t *testing.T) {
 			return "/repo\n", nil
 		case len(args) == 5 && args[0] == "branch" && args[1] == "--contains":
 			return "", nil
-		case len(args) == 4 && args[0] == "log" && args[1] == "--reverse" && args[2] == "--format="+format:
-			return "newsha1\x1fnewsha1\x1fNew\x1fBody\x1e" +
-				"childsha\x1fchildsha\x1fChild\x1f\x1e", nil
+		case len(args) == 5 && args[0] == "log" && args[1] == "--reverse" && args[2] == "--topo-order" && args[3] == "--format="+format:
+			return "newsha1\x1foldbase\x1fnewsha1\x1fNew\x1fBody\x1e" +
+				"childsha\x1fnewsha1\x1fchildsha\x1fChild\x1f\x1e", nil
 		default:
 			return "", fmt.Errorf("unexpected git call: %v", args)
 		}

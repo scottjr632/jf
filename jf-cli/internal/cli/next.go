@@ -25,12 +25,20 @@ func newNextCmd(opts *rootOptions) *cobra.Command {
 				trunk = cfg.Trunk
 			}
 
-			target, err := stack.NextCommit(cmd.Context(), opts.repo, &cfg, trunk)
+			choices, err := stack.NextCommits(cmd.Context(), opts.repo, &cfg, trunk)
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stdout, "checkout %s %s\n", target.Short, target.Subject)
-			if err := git.RunPassthrough(cmd.Context(), opts.repo, "checkout", target.SHA); err != nil {
+			target := choices[0]
+			if len(choices) > 1 {
+				selection, err := promptStackCommitSelection(choices)
+				if err != nil {
+					return err
+				}
+				target = selection
+			}
+			fmt.Fprintf(os.Stdout, "checkout %s %s\n", target.Commit.Short, target.Commit.Subject)
+			if err := git.RunPassthrough(cmd.Context(), opts.repo, "checkout", target.Commit.SHA); err != nil {
 				return err
 			}
 			return stack.SyncCurrent(cmd.Context(), opts.repo, &cfg, trunk)

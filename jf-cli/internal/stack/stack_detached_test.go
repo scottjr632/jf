@@ -18,7 +18,7 @@ func TestCurrentStackDetachedHeadUsesContainingBranch(t *testing.T) {
 		mkdirAll = originalMkdir
 	}()
 
-	format := "%H%x1f%h%x1f%s%x1f%b%x1e"
+	format := "%H%x1f%P%x1f%h%x1f%s%x1f%b%x1e"
 
 	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
 		joined := strings.Join(args, " ")
@@ -37,8 +37,8 @@ func TestCurrentStackDetachedHeadUsesContainingBranch(t *testing.T) {
 			return "feature\nmain\n", nil
 		case "merge-base --is-ancestor main feature":
 			return "", nil
-		case "log --reverse --format=" + format + " main..feature":
-			return "abc123\x1fabc123\x1fFirst\x1f\x1e", nil
+		case "log --reverse --topo-order --format=" + format + " main..feature":
+			return "abc123\x1ftrunksha\x1fabc123\x1fFirst\x1f\x1e", nil
 		case "rev-parse --short HEAD":
 			return "abc123\n", nil
 		default:
