@@ -8,11 +8,14 @@ import (
 	"strings"
 
 	"github.com/scottjr632/jf-cli/internal/git"
+	"github.com/scottjr632/jf-cli/internal/stack"
 )
 
 var runGit = git.Run
 var userHomeDir = os.UserHomeDir
 var mkdirAll = os.MkdirAll
+var loadStackConfig = stack.Load
+var findStackCommit = stack.FindStackCommit
 
 // List returns the output from `git worktree list`.
 func List(ctx context.Context, repo string) (string, error) {
@@ -23,6 +26,7 @@ func List(ctx context.Context, repo string) (string, error) {
 type Entry struct {
 	Path     string
 	Branch   string
+	Head     string
 	Detached bool
 }
 
@@ -86,14 +90,31 @@ func Merge(ctx context.Context, repo, sourcePath, targetBranch string) error {
 	if err != nil {
 		return err
 	}
-	sourceBranch, err := worktreeBranch(ctx, repo, resolvedPath)
+	entry, _, err := worktreeEntry(ctx, repo, resolvedPath)
 	if err != nil {
 		return err
 	}
-	if sourceBranch == "" {
-		return fmt.Errorf("worktree %q is detached", resolvedPath)
+	sourceRef := entry.Branch
+	if sourceRef == "" {
+		if entry.Detached {
+			head := entry.Head
+			if head == "" {
+				head, err = worktreeHeadSHA(ctx, resolvedPath)
+				if err != nil {
+					return err
+				}
+			}
+			stackRef, err := stackMergeRef(ctx, repo, head)
+			if err != nil {
+				return err
+			}
+			sourceRef = stackRef
+		}
+		if sourceRef == "" {
+			return fmt.Errorf("worktree %q is detached", resolvedPath)
+		}
 	}
-	if sourceBranch == targetBranch {
+	if sourceRef == targetBranch {
 		return fmt.Errorf("worktree %q is already on %q", resolvedPath, targetBranch)
 	}
 	targetPath, err := worktreePathForBranch(ctx, repo, targetBranch)
@@ -103,7 +124,7 @@ func Merge(ctx context.Context, repo, sourcePath, targetBranch string) error {
 	if targetPath == "" {
 		return fmt.Errorf("worktree for branch %q not found", targetBranch)
 	}
-	_, err = runGit(ctx, targetPath, "merge", sourceBranch)
+	_, err = runGit(ctx, targetPath, "merge", sourceRef)
 	return err
 }
 
@@ -215,6 +236,92 @@ func worktreeBranch(ctx context.Context, repo, resolvedPath string) (string, err
 	return "", nil
 }
 
+func worktreeEntry(ctx context.Context, repo, resolvedPath string) (Entry, bool, error) {
+	entries, err := ListEntries(ctx, repo)
+	if err != nil {
+		return Entry{}, false, err
+	}
+	paths := []string{resolvedPath}
+	if !filepath.IsAbs(resolvedPath) {
+		if absPath, err := filepath.Abs(resolvedPath); err == nil {
+			paths = append(paths, absPath)
+		}
+	}
+	for _, entry := range entries {
+		if stringSliceContains(paths, entry.Path) {
+			return entry, true, nil
+		}
+	}
+	return Entry{}, false, nil
+}
+
+func stackMergeRef(ctx context.Context, repo, head string) (string, error) {
+	head = strings.TrimSpace(head)
+	if head == "" {
+		return "", nil
+	}
+	cfg, err := loadStackConfig(ctx, repo)
+	if err != nil {
+		return "", err
+	}
+	if _, _, _, ok := findStackCommit(&cfg, head); ok {
+		return head, nil
+	}
+	expanded, err := runGit(ctx, repo, "rev-parse", "--verify", head+"^{commit}")
+	if err != nil {
+		expanded = ""
+	}
+	expanded = strings.TrimSpace(expanded)
+	if expanded == "" {
+		expanded = head
+	}
+	if _, _, _, ok := findStackCommit(&cfg, expanded); ok {
+		return expanded, nil
+	}
+	if isStackCommit, err := isStackAncestor(ctx, repo, cfg.Trunk, expanded); err != nil {
+		return "", err
+	} else if isStackCommit {
+		return expanded, nil
+	}
+	return "", nil
+}
+
+func worktreeHeadSHA(ctx context.Context, resolvedPath string) (string, error) {
+	out, err := runGit(ctx, resolvedPath, "rev-parse", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
+func isStackAncestor(ctx context.Context, repo, trunk, head string) (bool, error) {
+	trunk = strings.TrimSpace(trunk)
+	head = strings.TrimSpace(head)
+	if trunk == "" || head == "" {
+		return false, nil
+	}
+	trunkSHA, err := runGit(ctx, repo, "rev-parse", "--verify", trunk+"^{commit}")
+	if err != nil {
+		return false, nil
+	}
+	trunkSHA = strings.TrimSpace(trunkSHA)
+	if trunkSHA == "" {
+		return false, nil
+	}
+	headSHA, err := runGit(ctx, repo, "rev-parse", "--verify", head+"^{commit}")
+	if err != nil {
+		return false, nil
+	}
+	headSHA = strings.TrimSpace(headSHA)
+	if headSHA == "" || headSHA == trunkSHA {
+		return false, nil
+	}
+	if _, err := runGit(ctx, repo, "merge-base", "--is-ancestor", trunkSHA, headSHA); err != nil {
+		return false, nil
+	}
+	return true, nil
+}
+
 func worktreePathForBranch(ctx context.Context, repo, branch string) (string, error) {
 	output, err := runGit(ctx, repo, "worktree", "list", "--porcelain")
 	if err != nil {
@@ -271,6 +378,13 @@ func parseWorktreeEntries(output string) []Entry {
 		if strings.HasPrefix(line, "branch ") {
 			ref := strings.TrimSpace(strings.TrimPrefix(line, "branch "))
 			current.Branch = strings.TrimPrefix(ref, "refs/heads/")
+			continue
+		}
+		if strings.HasPrefix(line, "HEAD") {
+			parts := strings.Fields(line)
+			if len(parts) > 1 {
+				current.Head = strings.TrimSpace(parts[1])
+			}
 			continue
 		}
 		if line == "detached" {

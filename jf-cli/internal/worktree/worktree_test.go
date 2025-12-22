@@ -6,6 +6,8 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/scottjr632/jf-cli/internal/stack"
 )
 
 func TestListUsesGitWorktreeList(t *testing.T) {
@@ -47,8 +49,8 @@ func TestListEntriesParsesPorcelain(t *testing.T) {
 		t.Fatalf("ListEntries returned error: %v", err)
 	}
 	want := []Entry{
-		{Path: "/tmp/main", Branch: "main"},
-		{Path: "/tmp/feature", Detached: true},
+		{Path: "/tmp/main", Branch: "main", Head: "123"},
+		{Path: "/tmp/feature", Head: "456", Detached: true},
 	}
 	if !reflect.DeepEqual(entries, want) {
 		t.Fatalf("expected entries %v, got %v", want, entries)
@@ -267,17 +269,147 @@ func TestMergeUsesTargetWorktree(t *testing.T) {
 
 func TestMergeFailsWhenDetached(t *testing.T) {
 	original := runGit
+	originalLoad := loadStackConfig
+	originalFind := findStackCommit
 	defer func() { runGit = original }()
+	defer func() {
+		loadStackConfig = originalLoad
+		findStackCommit = originalFind
+	}()
 
 	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
 		if reflect.DeepEqual(args, []string{"worktree", "list", "--porcelain"}) {
 			return "worktree /tmp/feature\nHEAD 456\ndetached\n", nil
 		}
+		if len(args) >= 3 && args[0] == "rev-parse" {
+			return "", errors.New("not-a-ref")
+		}
+		if len(args) >= 2 && args[0] == "merge-base" {
+			return "", errors.New("not-ancestor")
+		}
 		return "", nil
+	}
+	loadStackConfig = func(context.Context, string) (stack.Config, error) {
+		return stack.DefaultConfig(), nil
+	}
+	findStackCommit = func(_ *stack.Config, _ string) (string, string, stack.CommitMeta, bool) {
+		return "", "", stack.CommitMeta{}, false
 	}
 
 	if err := Merge(context.Background(), "/repo", "/tmp/feature", "main"); err == nil {
 		t.Fatalf("expected merge to fail for detached worktree")
+	}
+}
+
+func TestMergeAllowsDetachedStackCommit(t *testing.T) {
+	originalRun := runGit
+	originalLoad := loadStackConfig
+	originalFind := findStackCommit
+	defer func() {
+		runGit = originalRun
+		loadStackConfig = originalLoad
+		findStackCommit = originalFind
+	}()
+
+	var gotCalls []struct {
+		repo string
+		args []string
+	}
+	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
+		gotCalls = append(gotCalls, struct {
+			repo string
+			args []string
+		}{
+			repo: repo,
+			args: append([]string{}, args...),
+		})
+		if reflect.DeepEqual(args, []string{"worktree", "list", "--porcelain"}) {
+			return "worktree /tmp/main\nHEAD 123\nbranch refs/heads/main\n\nworktree /tmp/feature\nHEAD 456\ndetached\n", nil
+		}
+		if len(args) >= 3 && args[0] == "rev-parse" {
+			return args[2], nil
+		}
+		return "", nil
+	}
+	loadStackConfig = func(context.Context, string) (stack.Config, error) {
+		return stack.Config{}, nil
+	}
+	findStackCommit = func(_ *stack.Config, sha string) (string, string, stack.CommitMeta, bool) {
+		if sha == "456" {
+			return "feature", "id-1", stack.CommitMeta{SHA: sha}, true
+		}
+		return "", "", stack.CommitMeta{}, false
+	}
+
+	if err := Merge(context.Background(), "/repo", "/tmp/feature", "main"); err != nil {
+		t.Fatalf("Merge returned error: %v", err)
+	}
+	if len(gotCalls) != 3 {
+		t.Fatalf("expected 3 git calls, got %d", len(gotCalls))
+	}
+	if gotCalls[2].repo != "/tmp/main" {
+		t.Fatalf("expected merge to run in %q, got %q", "/tmp/main", gotCalls[2].repo)
+	}
+	if !reflect.DeepEqual(gotCalls[2].args, []string{"merge", "456"}) {
+		t.Fatalf("expected merge args %v, got %v", []string{"merge", "456"}, gotCalls[2].args)
+	}
+}
+
+func TestMergeAllowsDetachedStackByTrunkAncestor(t *testing.T) {
+	originalRun := runGit
+	originalLoad := loadStackConfig
+	originalFind := findStackCommit
+	defer func() {
+		runGit = originalRun
+		loadStackConfig = originalLoad
+		findStackCommit = originalFind
+	}()
+
+	var gotCalls []struct {
+		repo string
+		args []string
+	}
+	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
+		gotCalls = append(gotCalls, struct {
+			repo string
+			args []string
+		}{
+			repo: repo,
+			args: append([]string{}, args...),
+		})
+		if reflect.DeepEqual(args, []string{"worktree", "list", "--porcelain"}) {
+			return "worktree /tmp/main\nHEAD 123\nbranch refs/heads/main\n\nworktree /tmp/feature\nHEAD 789\ndetached\n", nil
+		}
+		if reflect.DeepEqual(args, []string{"rev-parse", "--verify", "main^{commit}"}) {
+			return "111", nil
+		}
+		if reflect.DeepEqual(args, []string{"rev-parse", "--verify", "789^{commit}"}) {
+			return "789", nil
+		}
+		if reflect.DeepEqual(args, []string{"merge-base", "--is-ancestor", "111", "789"}) {
+			return "", nil
+		}
+		return "", nil
+	}
+	loadStackConfig = func(context.Context, string) (stack.Config, error) {
+		return stack.Config{Trunk: "main"}, nil
+	}
+	findStackCommit = func(_ *stack.Config, _ string) (string, string, stack.CommitMeta, bool) {
+		return "", "", stack.CommitMeta{}, false
+	}
+
+	if err := Merge(context.Background(), "/repo", "/tmp/feature", "main"); err != nil {
+		t.Fatalf("Merge returned error: %v", err)
+	}
+	if len(gotCalls) == 0 {
+		t.Fatalf("expected git calls")
+	}
+	last := gotCalls[len(gotCalls)-1]
+	if last.repo != "/tmp/main" {
+		t.Fatalf("expected merge to run in %q, got %q", "/tmp/main", last.repo)
+	}
+	if !reflect.DeepEqual(last.args, []string{"merge", "789"}) {
+		t.Fatalf("expected merge args %v, got %v", []string{"merge", "789"}, last.args)
 	}
 }
 
