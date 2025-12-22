@@ -47,7 +47,7 @@ func newAmendCmd(opts *rootOptions) *cobra.Command {
 				repo = path
 			}
 
-			if err := stageForCommit(cmd.Context(), repo); err != nil {
+			if err := stageForCommit(cmd.Context(), repo, false); err != nil {
 				return err
 			}
 

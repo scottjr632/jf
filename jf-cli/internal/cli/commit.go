@@ -18,18 +18,25 @@ type commitArgs struct {
 	amend          bool
 	worktree       string
 	promptWorktree bool
+	stageAll       bool
 	gitArgs        []string
 }
 
 func newCommitCmd(opts *rootOptions) *cobra.Command {
+	var stageAllFlag bool
+	var stageAllUpperFlag bool
+
 	cmd := &cobra.Command{
-		Use:   "commit [--amend] [--worktree <path|name>] [-- <git commit args...>]",
+		Use:   "commit [--amend] [-a|-A] [--worktree <path|name>] [-- <git commit args...>]",
 		Short: "Commit changes",
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsed, err := parseCommitArgs(args)
 			if err != nil {
 				return err
+			}
+			if stageAllFlag || stageAllUpperFlag {
+				parsed.stageAll = true
 			}
 
 			repo := opts.repo
@@ -51,7 +58,7 @@ func newCommitCmd(opts *rootOptions) *cobra.Command {
 				repo = path
 			}
 
-			if err := stageForCommit(cmd.Context(), repo); err != nil {
+			if err := stageForCommit(cmd.Context(), repo, parsed.stageAll); err != nil {
 				return err
 			}
 
@@ -70,11 +77,18 @@ func newCommitCmd(opts *rootOptions) *cobra.Command {
 			return stack.RecordCommit(cmd.Context(), repo, &cfg, "")
 		},
 	}
+	cmd.Flags().BoolVarP(&stageAllFlag, "all", "a", false, "Stage all changes")
+	cmd.Flags().BoolVarP(&stageAllUpperFlag, "all-files", "A", false, "Stage all changes")
+	cmd.FParseErrWhitelist.UnknownFlags = true
 
 	return cmd
 }
 
-func stageForCommit(ctx context.Context, repo string) error {
+func stageForCommit(ctx context.Context, repo string, stageAll bool) error {
+	if stageAll {
+		return git.RunPassthrough(ctx, repo, "add", "-A")
+	}
+
 	if err := git.RunPassthrough(ctx, repo, "add", "-p"); err != nil {
 		return err
 	}
@@ -156,6 +170,10 @@ func parseCommitArgs(args []string) (commitArgs, error) {
 		}
 		if arg == "--amend" {
 			parsed.amend = true
+			continue
+		}
+		if arg == "-a" || arg == "-A" {
+			parsed.stageAll = true
 			continue
 		}
 		if arg == "--worktree" {
