@@ -67,13 +67,13 @@ func TestSubmitCurrentCreatesAndUpdates(t *testing.T) {
 			branch := args[3]
 			listCounts[branch]++
 			switch branch {
-			case "jf/stack/01-first-abc123":
+			case "jf/stack/01-id1":
 				if listCounts[branch] == 1 {
 					return "[]", nil
 				}
-				return "[{\"number\":1,\"baseRefName\":\"main\",\"headRefName\":\"jf/stack/01-first-abc123\",\"title\":\"First\"}]", nil
-			case "jf/stack/02-second-def456":
-				return "[{\"number\":2,\"baseRefName\":\"wrong\",\"headRefName\":\"jf/stack/02-second-def456\",\"title\":\"Second\"}]", nil
+				return "[{\"number\":1,\"baseRefName\":\"main\",\"headRefName\":\"jf/stack/01-id1\",\"title\":\"First\"}]", nil
+			case "jf/stack/02-id2":
+				return "[{\"number\":2,\"baseRefName\":\"wrong\",\"headRefName\":\"jf/stack/02-id2\",\"title\":\"Second\"}]", nil
 			default:
 				return "[]", nil
 			}
@@ -97,6 +97,15 @@ func TestSubmitCurrentCreatesAndUpdates(t *testing.T) {
 	mkdirAll = func(string, os.FileMode) error { return nil }
 
 	cfg := DefaultConfig()
+	cfg.Stacks["feature"] = StackMeta{
+		Trunk: "main",
+		Order: []string{"id-1", "id-2"},
+		Commits: map[string]CommitMeta{
+			"id-1": {SHA: "abc123", Subject: "First", Body: "Body"},
+			"id-2": {SHA: "def456", Subject: "Second", Body: ""},
+		},
+		Current: "id-2",
+	}
 	results, err := SubmitCurrent(context.Background(), "/repo", cfg, SubmitOptions{})
 	if err != nil {
 		t.Fatalf("SubmitCurrent returned error: %v", err)

@@ -25,13 +25,13 @@ func newLogLongCmd(opts *rootOptions) *cobra.Command {
 				trunk = cfg.Trunk
 			}
 
-			stackInfo, err := stack.CurrentStack(cmd.Context(), opts.repo, &cfg, trunk)
+			stackInfo, err := stack.CurrentStackDetails(cmd.Context(), opts.repo, &cfg, trunk)
 			if err != nil {
 				return err
 			}
 			fmt.Fprintf(os.Stdout, "trunk: %s\n", stackInfo.Trunk)
 			fmt.Fprintf(os.Stdout, "head: %s\n", stackInfo.Head)
-			if len(stackInfo.Commits) == 0 {
+			if len(stackInfo.Items) == 0 {
 				fmt.Fprintln(os.Stdout, "No commits in stack.")
 				return nil
 			}
@@ -40,9 +40,10 @@ func newLogLongCmd(opts *rootOptions) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			for i, commit := range stackInfo.Commits {
+			for i, item := range stackInfo.Items {
+				commit := item.Commit
 				fmt.Fprintf(os.Stdout, "  %d) %s %s\n", i+1, commit.Short, commit.Subject)
-				branch := stack.BranchNameForCommit(cfg.BranchPrefix, i+1, commit)
+				branch := stack.BranchNameForCommit(cfg.BranchPrefix, i+1, item.ID, commit)
 				pr, err := stack.PRForBranch(cmd.Context(), root, branch)
 				if err != nil {
 					return err

@@ -25,6 +25,19 @@ type Stack struct {
 	Commits []Commit
 }
 
+// StackItem describes a stack commit with its stable id.
+type StackItem struct {
+	ID     string
+	Commit Commit
+}
+
+// StackDetails represents the current stack with stable ids.
+type StackDetails struct {
+	Trunk string
+	Head  string
+	Items []StackItem
+}
+
 // CurrentStack returns commits for the current stack using metadata.
 func CurrentStack(ctx context.Context, repo string, cfg *Config, trunkOverride string) (Stack, error) {
 	resolved, err := resolveStack(ctx, repo, cfg, trunkOverride)
@@ -50,6 +63,51 @@ func CurrentStack(ctx context.Context, repo string, cfg *Config, trunkOverride s
 		Trunk:   resolved.effectiveTrunk,
 		Head:    headLabel,
 		Commits: stackCommits(resolved.stack),
+	}, nil
+}
+
+// CurrentStackDetails returns commits for the current stack with stable ids.
+func CurrentStackDetails(ctx context.Context, repo string, cfg *Config, trunkOverride string) (StackDetails, error) {
+	resolved, err := resolveStack(ctx, repo, cfg, trunkOverride)
+	if err != nil {
+		return StackDetails{}, err
+	}
+	if resolved.changed {
+		if err := Save(ctx, repo, *cfg); err != nil {
+			return StackDetails{}, err
+		}
+	}
+
+	headLabel := resolved.headRef
+	if resolved.detached {
+		label, err := currentShortSHA(ctx, repo)
+		if err != nil {
+			return StackDetails{}, err
+		}
+		headLabel = label
+	}
+
+	items := make([]StackItem, 0, len(resolved.stack.Order))
+	for _, id := range resolved.stack.Order {
+		meta, ok := resolved.stack.Commits[id]
+		if !ok {
+			continue
+		}
+		items = append(items, StackItem{
+			ID: id,
+			Commit: Commit{
+				SHA:     meta.SHA,
+				Short:   shortSHA(meta.SHA),
+				Subject: meta.Subject,
+				Body:    meta.Body,
+			},
+		})
+	}
+
+	return StackDetails{
+		Trunk: resolved.effectiveTrunk,
+		Head:  headLabel,
+		Items: items,
 	}, nil
 }
 
