@@ -9,8 +9,9 @@ import (
 
 func newRemoveCmd(opts *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "remove <path|name>",
-		Short: "Remove a worktree",
+		Use:     "remove <path|name>",
+		Short:   "Remove a worktree",
+		Aliases: []string{"rm"},
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 1 {
 				return errors.New("expected <path|name>")

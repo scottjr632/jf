@@ -109,6 +109,9 @@ func Merge(ctx context.Context, repo, sourcePath, targetBranch string) error {
 				return err
 			}
 			sourceRef = stackRef
+			if sourceRef == "" {
+				sourceRef = strings.TrimSpace(head)
+			}
 		}
 		if sourceRef == "" {
 			return fmt.Errorf("worktree %q is detached", resolvedPath)

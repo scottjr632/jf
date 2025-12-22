@@ -281,8 +281,8 @@ func TestMergeFailsWhenDetached(t *testing.T) {
 		if reflect.DeepEqual(args, []string{"worktree", "list", "--porcelain"}) {
 			return "worktree /tmp/feature\nHEAD 456\ndetached\n", nil
 		}
-		if len(args) >= 3 && args[0] == "rev-parse" {
-			return "", errors.New("not-a-ref")
+		if reflect.DeepEqual(args, []string{"rev-parse", "HEAD"}) {
+			return "", errors.New("no-head")
 		}
 		if len(args) >= 2 && args[0] == "merge-base" {
 			return "", errors.New("not-ancestor")
@@ -298,6 +298,58 @@ func TestMergeFailsWhenDetached(t *testing.T) {
 
 	if err := Merge(context.Background(), "/repo", "/tmp/feature", "main"); err == nil {
 		t.Fatalf("expected merge to fail for detached worktree")
+	}
+}
+
+func TestMergeAllowsDetachedWithoutStack(t *testing.T) {
+	originalRun := runGit
+	originalLoad := loadStackConfig
+	originalFind := findStackCommit
+	defer func() {
+		runGit = originalRun
+		loadStackConfig = originalLoad
+		findStackCommit = originalFind
+	}()
+
+	var gotCalls []struct {
+		repo string
+		args []string
+	}
+	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
+		gotCalls = append(gotCalls, struct {
+			repo string
+			args []string
+		}{
+			repo: repo,
+			args: append([]string{}, args...),
+		})
+		if reflect.DeepEqual(args, []string{"worktree", "list", "--porcelain"}) {
+			return "worktree /tmp/main\nHEAD 123\nbranch refs/heads/main\n\nworktree /tmp/feature\nHEAD 789\ndetached\n", nil
+		}
+		if reflect.DeepEqual(args, []string{"rev-parse", "HEAD"}) {
+			return "789", nil
+		}
+		return "", nil
+	}
+	loadStackConfig = func(context.Context, string) (stack.Config, error) {
+		return stack.Config{Trunk: "main"}, nil
+	}
+	findStackCommit = func(_ *stack.Config, _ string) (string, string, stack.CommitMeta, bool) {
+		return "", "", stack.CommitMeta{}, false
+	}
+
+	if err := Merge(context.Background(), "/repo", "/tmp/feature", "main"); err != nil {
+		t.Fatalf("Merge returned error: %v", err)
+	}
+	if len(gotCalls) == 0 {
+		t.Fatalf("expected git calls")
+	}
+	last := gotCalls[len(gotCalls)-1]
+	if last.repo != "/tmp/main" {
+		t.Fatalf("expected merge to run in %q, got %q", "/tmp/main", last.repo)
+	}
+	if !reflect.DeepEqual(last.args, []string{"merge", "789"}) {
+		t.Fatalf("expected merge args %v, got %v", []string{"merge", "789"}, last.args)
 	}
 }
 

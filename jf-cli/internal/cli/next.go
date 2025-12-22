@@ -31,7 +31,7 @@ func newNextCmd(opts *rootOptions) *cobra.Command {
 			}
 			target := choices[0]
 			if len(choices) > 1 {
-				selection, err := promptStackCommitSelection(choices)
+				selection, err := promptNextCommitSelection(choices)
 				if err != nil {
 					return err
 				}

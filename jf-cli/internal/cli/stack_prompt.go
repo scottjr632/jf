@@ -11,7 +11,7 @@ import (
 	"github.com/scottjr632/jf-cli/internal/stack"
 )
 
-func promptStackCommitSelection(commits []stack.StackItem) (stack.StackItem, error) {
+func promptNextCommitSelection(commits []stack.StackItem) (stack.StackItem, error) {
 	if len(commits) == 0 {
 		return stack.StackItem{}, fmt.Errorf("no commits to select")
 	}
