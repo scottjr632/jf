@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/scottjr632/jf-cli/internal/git"
@@ -101,8 +102,8 @@ func splitRepoFlags(args []string) (string, []string) {
 			out = append(out, arg)
 			continue
 		}
-		if strings.HasPrefix(arg, "--repo=") {
-			repo = strings.TrimPrefix(arg, "--repo=")
+		if after, ok := strings.CutPrefix(arg, "--repo="); ok {
+			repo = after
 			continue
 		}
 		out = append(out, arg)
@@ -134,10 +135,8 @@ func isJFCommand(cmd *cobra.Command, name string) bool {
 		if sub.Name() == name {
 			return true
 		}
-		for _, alias := range sub.Aliases {
-			if alias == name {
-				return true
-			}
+		if slices.Contains(sub.Aliases, name) {
+			return true
 		}
 		if isJFCommand(sub, name) {
 			return true

@@ -9,8 +9,9 @@ import (
 
 func newListCmd(opts *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List worktrees for the repo",
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Short:   "List worktrees for the repo",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			output, err := worktree.List(cmd.Context(), opts.repo)
 			if err != nil {
