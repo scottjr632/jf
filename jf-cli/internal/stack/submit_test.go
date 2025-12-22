@@ -60,6 +60,9 @@ func TestSubmitCurrentCreatesAndUpdates(t *testing.T) {
 		if repo != "/repo" {
 			return "", errors.New("unexpected repo")
 		}
+		if len(args) >= 2 && args[0] == "repo" && args[1] == "view" {
+			return "owner/repo\n", nil
+		}
 		if len(args) >= 2 && args[0] == "pr" && args[1] == "list" {
 			branch := args[3]
 			listCounts[branch]++
@@ -80,6 +83,9 @@ func TestSubmitCurrentCreatesAndUpdates(t *testing.T) {
 		}
 		if len(args) >= 2 && args[0] == "pr" && args[1] == "comment" {
 			return "", nil
+		}
+		if len(args) >= 1 && args[0] == "api" {
+			return "[]", nil
 		}
 		if len(args) >= 2 && args[0] == "pr" && args[1] == "edit" {
 			return "", nil
