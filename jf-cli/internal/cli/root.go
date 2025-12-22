@@ -33,6 +33,7 @@ func newRootCommand() *cobra.Command {
 		newCheckoutCmd(opts),
 		newMainCmd(opts),
 		newLsCmd(opts),
+		newLogLongCmd(opts),
 		newNextCmd(opts),
 		newPrevCmd(opts),
 		newMergeCmd(opts),

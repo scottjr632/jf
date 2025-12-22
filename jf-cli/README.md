@@ -38,6 +38,7 @@ Stacked commits:
 
 ```sh
 jf ls
+jf log-long
 jf trunk [branch]
 jf sync
 jf submit
@@ -47,6 +48,7 @@ jf stack status
 ```
 
 `jf ls` shows commits between trunk and HEAD as the current stack.
+`jf log-long` shows stack commits with PR status details.
 `jf submit` creates or updates one PR per commit using the `gh` CLI.
 Stack metadata (trunk, stacks, and current commit pointer) lives in `.jf/stack.json`.
 
@@ -59,8 +61,13 @@ jf trunk main
 # View the current stack of commits (oldest -> newest)
 jf ls
 
+# View the current stack with PR status details
+jf ll
+
 # Create/update PRs for each commit in the stack
 jf submit
+ or 
+jf ls
 
 # Override trunk for a one-off stack listing
 jf ls --trunk release
