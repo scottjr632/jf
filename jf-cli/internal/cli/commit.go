@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/scottjr632/jf-cli/internal/git"
+	"github.com/scottjr632/jf-cli/internal/stack"
 	"github.com/scottjr632/jf-cli/internal/worktree"
 	"github.com/spf13/cobra"
 )
@@ -59,7 +60,14 @@ func newCommitCmd(opts *rootOptions) *cobra.Command {
 				gitArgs = append(gitArgs, "--amend")
 			}
 			gitArgs = append(gitArgs, parsed.gitArgs...)
-			return git.RunPassthrough(cmd.Context(), repo, gitArgs...)
+			if err := git.RunPassthrough(cmd.Context(), repo, gitArgs...); err != nil {
+				return err
+			}
+			cfg, err := stack.Load(cmd.Context(), repo)
+			if err != nil {
+				return err
+			}
+			return stack.RecordCommit(cmd.Context(), repo, &cfg, "")
 		},
 	}
 

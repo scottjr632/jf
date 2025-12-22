@@ -3,6 +3,7 @@ package stack
 import (
 	"context"
 	"errors"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -11,9 +12,13 @@ import (
 func TestSubmitCurrentCreatesAndUpdates(t *testing.T) {
 	originalRunGit := runGit
 	originalRunGh := runGh
+	originalWrite := writeFile
+	originalMkdir := mkdirAll
 	defer func() {
 		runGit = originalRunGit
 		runGh = originalRunGh
+		writeFile = originalWrite
+		mkdirAll = originalMkdir
 	}()
 
 	format := "%H%x1f%h%x1f%s%x1f%b%x1e"
@@ -28,10 +33,16 @@ func TestSubmitCurrentCreatesAndUpdates(t *testing.T) {
 		if reflect.DeepEqual(args, []string{"rev-parse", "--abbrev-ref", "HEAD"}) {
 			return "feature\n", nil
 		}
-		if reflect.DeepEqual(args, []string{"merge-base", "--is-ancestor", "main", "HEAD"}) {
+		if reflect.DeepEqual(args, []string{"rev-parse", "HEAD"}) {
+			return "def456\n", nil
+		}
+		if reflect.DeepEqual(args, []string{"rev-parse", "--verify", "ORIG_HEAD"}) {
+			return "", errors.New("missing")
+		}
+		if reflect.DeepEqual(args, []string{"merge-base", "--is-ancestor", "main", "feature"}) {
 			return "", nil
 		}
-		if reflect.DeepEqual(args, []string{"log", "--reverse", "--format=" + format, "main..HEAD"}) {
+		if reflect.DeepEqual(args, []string{"log", "--reverse", "--format=" + format, "main..feature"}) {
 			return "abc123\x1fabc123\x1fFirst\x1fBody\x1e" +
 				"def456\x1fdef456\x1fSecond\x1f\x1e", nil
 		}
@@ -67,11 +78,17 @@ func TestSubmitCurrentCreatesAndUpdates(t *testing.T) {
 		if len(args) >= 2 && args[0] == "pr" && args[1] == "create" {
 			return "", nil
 		}
+		if len(args) >= 2 && args[0] == "pr" && args[1] == "comment" {
+			return "", nil
+		}
 		if len(args) >= 2 && args[0] == "pr" && args[1] == "edit" {
 			return "", nil
 		}
 		return "", errors.New("unexpected gh call")
 	}
+
+	writeFile = func(string, []byte, os.FileMode) error { return nil }
+	mkdirAll = func(string, os.FileMode) error { return nil }
 
 	cfg := DefaultConfig()
 	results, err := SubmitCurrent(context.Background(), "/repo", cfg, SubmitOptions{})

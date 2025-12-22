@@ -1,6 +1,6 @@
 # Plan
 
-We will extend `jf` with a stacked-branch workflow backed by local metadata files and GitHub PR creation/update via the `gh` CLI, defaulting trunk to `main` while allowing user override.
+We will extend `jf` with a commit-stack workflow backed by local metadata files and GitHub PR creation/update via the `gh` CLI, defaulting trunk to `main` while allowing user override.
 
 ## Scope
 - In: stack metadata format + storage, CLI commands to manage stacks, PR submission/update for a stack via `gh`, sync/rebase helpers, tests/docs updates.
@@ -14,9 +14,9 @@ We will extend `jf` with a stacked-branch workflow backed by local metadata file
  [x] Wire config + stack helpers; update docs/tests; run `go test ./...`.
 
 ## Design
-- Stacks are automatically created when a new commit is created
-- `jf commit` automatically creates a new commit that is treated as a new stack item
-- `jf amend` amends to the current commit
-- `jf ls` lists the current stack and its items which are commits
-- `jf submit` creates a PR for the current stack, one PR per commit and the PR name should be automatically in inferred
-- we should treat commits as atomic units that hold one logical changes
+- Stacks are persisted in `.jf/stack.json` with UUID-backed commit entries and a current pointer.
+- `jf commit` appends a new stack item (UUID + SHA) and updates the pointer.
+- `jf amend` updates the current stack item SHA and rebases descendants when needed.
+- `jf ls` lists the current stack items from metadata.
+- `jf submit` creates a PR per stack item and infers PR titles from commit subjects.
+- Commits are treated as atomic units of change.

@@ -39,12 +39,15 @@ Stacked commits:
 ```sh
 jf ls
 jf trunk [branch]
+jf sync
 jf submit
+jf next
+jf prev
 ```
 
 `jf ls` shows commits between trunk and HEAD as the current stack.
 `jf submit` creates or updates one PR per commit using the `gh` CLI.
-Trunk settings are stored in `.jf/stack.json`.
+Stack metadata (trunk, stacks, and current commit pointer) lives in `.jf/stack.json`.
 
 Examples:
 
@@ -60,6 +63,13 @@ jf submit
 
 # Override trunk for a one-off stack listing
 jf ls --trunk release
+
+# Refresh stack metadata after manual git history edits
+jf sync
+
+# Walk commit stack
+jf next
+jf prev
 ```
 
 Git passthrough:

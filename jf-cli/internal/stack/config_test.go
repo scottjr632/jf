@@ -38,6 +38,9 @@ func TestLoadDefaultsWhenMissing(t *testing.T) {
 	if cfg.BranchPrefix != defaultBranchPrefix {
 		t.Fatalf("expected prefix %q, got %q", defaultBranchPrefix, cfg.BranchPrefix)
 	}
+	if cfg.Stacks == nil {
+		t.Fatalf("expected stacks map to be initialized")
+	}
 }
 
 func TestSaveWritesConfig(t *testing.T) {
@@ -68,7 +71,7 @@ func TestSaveWritesConfig(t *testing.T) {
 		return nil
 	}
 
-	cfg := Config{Trunk: "main", Remote: "origin", BranchPrefix: "jf/stack"}
+	cfg := Config{Trunk: "main", Remote: "origin", BranchPrefix: "jf/stack", Stacks: map[string]StackMeta{}}
 	if err := Save(context.Background(), "/repo", cfg); err != nil {
 		t.Fatalf("Save returned error: %v", err)
 	}

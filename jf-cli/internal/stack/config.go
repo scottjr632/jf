@@ -20,11 +20,28 @@ var readFile = os.ReadFile
 var writeFile = os.WriteFile
 var mkdirAll = os.MkdirAll
 
+// CommitMeta stores metadata for a stack commit.
+type CommitMeta struct {
+	SHA     string `json:"sha"`
+	Subject string `json:"subject"`
+	Body    string `json:"body"`
+}
+
+// StackMeta stores commit ordering for a stack.
+type StackMeta struct {
+	Trunk   string                `json:"trunk"`
+	Order   []string              `json:"order"`
+	Commits map[string]CommitMeta `json:"commits"`
+	Current string                `json:"current"`
+}
+
 // Config stores stack settings for a repository.
 type Config struct {
-	Trunk        string `json:"trunk"`
-	Remote       string `json:"remote"`
-	BranchPrefix string `json:"branchPrefix"`
+	Trunk        string               `json:"trunk"`
+	Remote       string               `json:"remote"`
+	BranchPrefix string               `json:"branchPrefix"`
+	CurrentStack string               `json:"currentStack"`
+	Stacks       map[string]StackMeta `json:"stacks"`
 }
 
 // DefaultConfig returns the default configuration for a repo.
@@ -33,6 +50,7 @@ func DefaultConfig() Config {
 		Trunk:        defaultTrunk,
 		Remote:       defaultRemote,
 		BranchPrefix: defaultBranchPrefix,
+		Stacks:       map[string]StackMeta{},
 	}
 }
 
@@ -114,6 +132,18 @@ func applyDefaults(cfg *Config) {
 	}
 	if strings.TrimSpace(cfg.BranchPrefix) == "" {
 		cfg.BranchPrefix = defaultBranchPrefix
+	}
+	if cfg.Stacks == nil {
+		cfg.Stacks = map[string]StackMeta{}
+	}
+	for name, stack := range cfg.Stacks {
+		if strings.TrimSpace(stack.Trunk) == "" {
+			stack.Trunk = cfg.Trunk
+		}
+		if stack.Commits == nil {
+			stack.Commits = map[string]CommitMeta{}
+		}
+		cfg.Stacks[name] = stack
 	}
 }
 

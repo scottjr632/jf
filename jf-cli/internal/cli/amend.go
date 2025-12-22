@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/scottjr632/jf-cli/internal/git"
+	"github.com/scottjr632/jf-cli/internal/stack"
 	"github.com/scottjr632/jf-cli/internal/worktree"
 	"github.com/spf13/cobra"
 )
@@ -55,7 +56,14 @@ func newAmendCmd(opts *rootOptions) *cobra.Command {
 				gitArgs = append(gitArgs, "--no-edit")
 			}
 			gitArgs = append(gitArgs, parsed.gitArgs...)
-			return git.RunPassthrough(cmd.Context(), repo, gitArgs...)
+			if err := git.RunPassthrough(cmd.Context(), repo, gitArgs...); err != nil {
+				return err
+			}
+			cfg, err := stack.Load(cmd.Context(), repo)
+			if err != nil {
+				return err
+			}
+			return stack.RecordAmend(cmd.Context(), repo, &cfg, "")
 		},
 	}
 

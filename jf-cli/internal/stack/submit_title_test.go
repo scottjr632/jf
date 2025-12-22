@@ -3,6 +3,7 @@ package stack
 import (
 	"context"
 	"errors"
+	"os"
 	"reflect"
 	"testing"
 )
@@ -10,9 +11,13 @@ import (
 func TestSubmitCurrentUpdatesTitle(t *testing.T) {
 	originalRunGit := runGit
 	originalRunGh := runGh
+	originalWrite := writeFile
+	originalMkdir := mkdirAll
 	defer func() {
 		runGit = originalRunGit
 		runGh = originalRunGh
+		writeFile = originalWrite
+		mkdirAll = originalMkdir
 	}()
 
 	format := "%H%x1f%h%x1f%s%x1f%b%x1e"
@@ -27,10 +32,16 @@ func TestSubmitCurrentUpdatesTitle(t *testing.T) {
 		if reflect.DeepEqual(args, []string{"rev-parse", "--abbrev-ref", "HEAD"}) {
 			return "feature\n", nil
 		}
-		if reflect.DeepEqual(args, []string{"merge-base", "--is-ancestor", "main", "HEAD"}) {
+		if reflect.DeepEqual(args, []string{"rev-parse", "HEAD"}) {
+			return "abc123\n", nil
+		}
+		if reflect.DeepEqual(args, []string{"rev-parse", "--verify", "ORIG_HEAD"}) {
+			return "", errors.New("missing")
+		}
+		if reflect.DeepEqual(args, []string{"merge-base", "--is-ancestor", "main", "feature"}) {
 			return "", nil
 		}
-		if reflect.DeepEqual(args, []string{"log", "--reverse", "--format=" + format, "main..HEAD"}) {
+		if reflect.DeepEqual(args, []string{"log", "--reverse", "--format=" + format, "main..feature"}) {
 			return "abc123\x1fabc123\x1fNew title\x1fBody\x1e", nil
 		}
 		if len(args) == 4 && args[0] == "branch" && args[1] == "-f" {
@@ -56,6 +67,9 @@ func TestSubmitCurrentUpdatesTitle(t *testing.T) {
 		}
 		return "", errors.New("unexpected gh call")
 	}
+
+	writeFile = func(string, []byte, os.FileMode) error { return nil }
+	mkdirAll = func(string, os.FileMode) error { return nil }
 
 	cfg := DefaultConfig()
 	results, err := SubmitCurrent(context.Background(), "/repo", cfg, SubmitOptions{})
