@@ -13,12 +13,16 @@ type amendArgs struct {
 	edit           bool
 	worktree       string
 	promptWorktree bool
+	stageAll       bool
 	gitArgs        []string
 }
 
 func newAmendCmd(opts *rootOptions) *cobra.Command {
+	var stageAllFlag bool
+	var stageAllUpperFlag bool
+
 	cmd := &cobra.Command{
-		Use:     "amend [--edit] [--worktree <path|name>] [-- <git commit args...>]",
+		Use:     "amend [--edit] [-a|-A] [--worktree <path|name>] [-- <git commit args...>]",
 		Short:   "Amend the latest commit",
 		Aliases: []string{"am"},
 		Args:    cobra.ArbitraryArgs,
@@ -26,6 +30,9 @@ func newAmendCmd(opts *rootOptions) *cobra.Command {
 			parsed, err := parseAmendArgs(args)
 			if err != nil {
 				return err
+			}
+			if stageAllFlag || stageAllUpperFlag {
+				parsed.stageAll = true
 			}
 
 			repo := opts.repo
@@ -47,7 +54,7 @@ func newAmendCmd(opts *rootOptions) *cobra.Command {
 				repo = path
 			}
 
-			if err := stageForCommit(cmd.Context(), repo, false); err != nil {
+			if err := stageForCommit(cmd.Context(), repo, parsed.stageAll); err != nil {
 				return err
 			}
 
@@ -66,6 +73,8 @@ func newAmendCmd(opts *rootOptions) *cobra.Command {
 			return stack.RecordAmend(cmd.Context(), repo, &cfg, "")
 		},
 	}
+	cmd.Flags().BoolVarP(&stageAllFlag, "all", "a", false, "Stage all changes")
+	cmd.Flags().BoolVarP(&stageAllUpperFlag, "all-files", "A", false, "Stage all changes")
 
 	return cmd
 }
@@ -81,6 +90,10 @@ func parseAmendArgs(args []string) (amendArgs, error) {
 		}
 		if arg == "--edit" || arg == "-e" {
 			parsed.edit = true
+			continue
+		}
+		if arg == "-a" || arg == "-A" {
+			parsed.stageAll = true
 			continue
 		}
 		if arg == "--worktree" {
