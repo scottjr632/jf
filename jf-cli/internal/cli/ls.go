@@ -24,7 +24,7 @@ func newLsCmd(opts *rootOptions) *cobra.Command {
 				trunk = cfg.Trunk
 			}
 
-			stackInfo, err := stack.CurrentStack(cmd.Context(), opts.repo, trunk)
+			stackInfo, err := stack.CurrentStack(cmd.Context(), opts.repo, &cfg, trunk)
 			if err != nil {
 				return err
 			}

@@ -57,11 +57,16 @@ func SubmitCurrent(ctx context.Context, repo string, cfg Config, opts SubmitOpti
 		opts.BranchPrefix = cfg.BranchPrefix
 	}
 
-	stackInfo, err := CurrentStack(ctx, repo, opts.Trunk)
+	resolved, err := resolveStack(ctx, repo, &cfg, opts.Trunk)
 	if err != nil {
 		return nil, err
 	}
-	if len(stackInfo.Commits) == 0 {
+	if resolved.changed {
+		if err := Save(ctx, repo, cfg); err != nil {
+			return nil, err
+		}
+	}
+	if len(resolved.stack.Order) == 0 {
 		return nil, fmt.Errorf("no commits to submit")
 	}
 
@@ -70,10 +75,21 @@ func SubmitCurrent(ctx context.Context, repo string, cfg Config, opts SubmitOpti
 		return nil, err
 	}
 
-	results := make([]SubmitResult, 0, len(stackInfo.Commits))
-	base := stackInfo.Trunk
+	results := make([]SubmitResult, 0, len(resolved.stack.Order))
+	base := resolved.effectiveTrunk
 
-	for i, commit := range stackInfo.Commits {
+	for i, id := range resolved.stack.Order {
+		meta, ok := resolved.stack.Commits[id]
+		if !ok {
+			return nil, fmt.Errorf("missing metadata for stack commit")
+		}
+		commit := Commit{
+			SHA:     meta.SHA,
+			Short:   shortSHA(meta.SHA),
+			Subject: meta.Subject,
+			Body:    meta.Body,
+		}
+		position := i + 1
 		branch := branchNameForCommit(opts.BranchPrefix, i+1, commit)
 		if err := createOrUpdateBranch(ctx, repo, branch, commit.SHA); err != nil {
 			return nil, err
@@ -100,6 +116,9 @@ func SubmitCurrent(ctx context.Context, repo string, cfg Config, opts SubmitOpti
 			}
 			if pr == nil {
 				return nil, fmt.Errorf("created PR for %q but could not find it", branch)
+			}
+			if err := addStackComment(ctx, root, pr.Number, resolved.name, Stack{Trunk: resolved.effectiveTrunk, Head: resolved.headRef}, position, len(resolved.stack.Order)); err != nil {
+				return nil, err
 			}
 			result.Number = pr.Number
 			result.Action = SubmitCreated
@@ -181,6 +200,19 @@ func updatePRTitle(ctx context.Context, repoRoot string, number int, title strin
 		return fmt.Errorf("missing PR number")
 	}
 	_, err := runGh(ctx, repoRoot, "pr", "edit", fmt.Sprintf("%d", number), "--title", title)
+	return err
+}
+
+func addStackComment(ctx context.Context, repoRoot string, number int, stackName string, stackInfo Stack, position, total int) error {
+	if number == 0 {
+		return fmt.Errorf("missing PR number")
+	}
+	name := strings.TrimSpace(stackName)
+	if name == "" {
+		name = stackInfo.Head
+	}
+	message := fmt.Sprintf("Stack: %s (trunk: %s) [%d/%d]", name, stackInfo.Trunk, position, total)
+	_, err := runGh(ctx, repoRoot, "pr", "comment", fmt.Sprintf("%d", number), "--body", message)
 	return err
 }
 

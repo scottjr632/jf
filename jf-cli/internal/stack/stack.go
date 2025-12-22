@@ -4,7 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/scottjr632/jf-cli/internal/git"
 )
+
+var runGitPassthrough = git.RunPassthrough
 
 // Commit describes a stack item derived from git history.
 type Commit struct {
@@ -14,100 +18,251 @@ type Commit struct {
 	Body    string
 }
 
-// Stack represents the current stack of commits from trunk to HEAD.
+// Stack represents the current stack of commits from trunk to head.
 type Stack struct {
 	Trunk   string
 	Head    string
 	Commits []Commit
 }
 
-// CurrentStack returns commits between trunk and HEAD in order.
-func CurrentStack(ctx context.Context, repo, trunk string) (Stack, error) {
-	resolvedTrunk := strings.TrimSpace(trunk)
-	if resolvedTrunk == "" {
-		resolvedTrunk = defaultTrunk
-	}
-	if err := ensureBranchExists(ctx, repo, resolvedTrunk); err != nil {
-		return Stack{}, fmt.Errorf("trunk branch %q not found: %w", resolvedTrunk, err)
-	}
-
-	head, err := currentBranch(ctx, repo)
+// CurrentStack returns commits for the current stack using metadata.
+func CurrentStack(ctx context.Context, repo string, cfg *Config, trunkOverride string) (Stack, error) {
+	resolved, err := resolveStack(ctx, repo, cfg, trunkOverride)
 	if err != nil {
 		return Stack{}, err
 	}
-
-	if err := ensureAncestor(ctx, repo, resolvedTrunk, "HEAD"); err != nil {
-		return Stack{}, err
+	if resolved.changed {
+		if err := Save(ctx, repo, *cfg); err != nil {
+			return Stack{}, err
+		}
 	}
 
-	commits, err := listCommits(ctx, repo, resolvedTrunk)
-	if err != nil {
-		return Stack{}, err
+	headLabel := resolved.headRef
+	if resolved.detached {
+		label, err := currentShortSHA(ctx, repo)
+		if err != nil {
+			return Stack{}, err
+		}
+		headLabel = label
 	}
 
-	return Stack{Trunk: resolvedTrunk, Head: head, Commits: commits}, nil
+	return Stack{
+		Trunk:   resolved.effectiveTrunk,
+		Head:    headLabel,
+		Commits: stackCommits(resolved.stack),
+	}, nil
 }
 
-func ensureBranchExists(ctx context.Context, repo, branch string) error {
-	if strings.TrimSpace(branch) == "" {
-		return fmt.Errorf("branch name is required")
-	}
-	_, err := runGit(ctx, repo, "rev-parse", "--verify", "refs/heads/"+branch)
-	return err
-}
-
-func ensureAncestor(ctx context.Context, repo, base, head string) error {
-	_, err := runGit(ctx, repo, "merge-base", "--is-ancestor", base, head)
+// SyncCurrent updates the current stack pointer based on HEAD.
+func SyncCurrent(ctx context.Context, repo string, cfg *Config, trunkOverride string) error {
+	resolved, err := resolveStack(ctx, repo, cfg, trunkOverride)
 	if err != nil {
-		return fmt.Errorf("%q is not an ancestor of %q", base, head)
+		return err
+	}
+	if resolved.changed {
+		return Save(ctx, repo, *cfg)
 	}
 	return nil
 }
 
-func currentBranch(ctx context.Context, repo string) (string, error) {
+// RecordCommit appends a new commit to the current stack.
+func RecordCommit(ctx context.Context, repo string, cfg *Config, trunkOverride string) error {
+	resolved, err := resolveStack(ctx, repo, cfg, trunkOverride)
+	if err != nil {
+		return err
+	}
+	commit, err := readCommit(ctx, repo, "HEAD")
+	if err != nil {
+		return err
+	}
+
+	if id := commitIDForSHA(resolved.stack, commit.SHA); id != "" {
+		resolved.stack.Current = id
+		resolved.changed = true
+		cfg.Stacks[resolved.name] = resolved.stack
+		return Save(ctx, repo, *cfg)
+	}
+
+	id, err := newUUID()
+	if err != nil {
+		return err
+	}
+	resolved.stack.Order = append(resolved.stack.Order, id)
+	resolved.stack.Commits[id] = CommitMeta{SHA: commit.SHA, Subject: commit.Subject, Body: commit.Body}
+	resolved.stack.Current = id
+	resolved.changed = true
+	cfg.Stacks[resolved.name] = resolved.stack
+	cfg.CurrentStack = resolved.name
+
+	return Save(ctx, repo, *cfg)
+}
+
+// RecordAmend updates stack metadata after an amend and rebases descendants.
+func RecordAmend(ctx context.Context, repo string, cfg *Config, trunkOverride string) error {
+	resolved, err := resolveStack(ctx, repo, cfg, trunkOverride)
+	if err != nil {
+		return err
+	}
+
+	headCommit, err := readCommit(ctx, repo, "HEAD")
+	if err != nil {
+		return err
+	}
+
+	origSHA, err := resolveOptionalSHA(ctx, repo, "ORIG_HEAD")
+	if err != nil {
+		return err
+	}
+	if origSHA == "" {
+		return SyncCurrent(ctx, repo, cfg, trunkOverride)
+	}
+
+	amendedID := commitIDForSHA(resolved.stack, origSHA)
+	if amendedID == "" {
+		return SyncCurrent(ctx, repo, cfg, trunkOverride)
+	}
+
+	resolved.stack.Commits[amendedID] = CommitMeta{SHA: headCommit.SHA, Subject: headCommit.Subject, Body: headCommit.Body}
+	resolved.stack.Current = amendedID
+
+	amendedIndex := indexOfStackID(resolved.stack.Order, amendedID)
+	if amendedIndex != -1 && amendedIndex < len(resolved.stack.Order)-1 {
+		if resolved.stackHead == "HEAD" {
+			return fmt.Errorf("cannot rebase descendants without a branch containing HEAD")
+		}
+		if err := rebaseDescendants(ctx, repo, origSHA, headCommit.SHA, resolved.stackHead); err != nil {
+			return err
+		}
+		if err := refreshStackFromGit(ctx, repo, resolved.effectiveTrunk, resolved.stackHead, &resolved.stack); err != nil {
+			return err
+		}
+	}
+
+	cfg.Stacks[resolved.name] = resolved.stack
+	cfg.CurrentStack = resolved.name
+	return Save(ctx, repo, *cfg)
+}
+
+func rebaseDescendants(ctx context.Context, repo, oldSHA, newSHA, headRef string) error {
+	return runGitPassthrough(ctx, repo, "rebase", "--onto", newSHA, oldSHA, headRef)
+}
+
+func indexOfStackID(order []string, id string) int {
+	for i, candidate := range order {
+		if candidate == id {
+			return i
+		}
+	}
+	return -1
+}
+
+func currentHeadRef(ctx context.Context, repo string) (string, bool, error) {
 	out, err := runGit(ctx, repo, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	branch := strings.TrimSpace(out)
 	if branch == "" {
-		return "", fmt.Errorf("git rev-parse --abbrev-ref HEAD returned empty branch")
+		return "", false, fmt.Errorf("git rev-parse --abbrev-ref HEAD returned empty branch")
 	}
-	if branch == "HEAD" {
-		return "", fmt.Errorf("repository is in a detached HEAD state")
+	if branch == "HEAD" || strings.HasPrefix(branch, "(") || strings.Contains(branch, "detached") {
+		return "HEAD", true, nil
+	}
+	return branch, false, nil
+}
+
+func currentSHA(ctx context.Context, repo string) (string, error) {
+	out, err := runGit(ctx, repo, "rev-parse", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	sha := strings.TrimSpace(out)
+	if sha == "" {
+		return "", fmt.Errorf("git rev-parse HEAD returned empty output")
+	}
+	return sha, nil
+}
+
+func currentShortSHA(ctx context.Context, repo string) (string, error) {
+	out, err := runGit(ctx, repo, "rev-parse", "--short", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	sha := strings.TrimSpace(out)
+	if sha == "" {
+		return "", fmt.Errorf("git rev-parse --short HEAD returned empty output")
+	}
+	return sha, nil
+}
+
+func resolveOptionalSHA(ctx context.Context, repo, ref string) (string, error) {
+	out, err := runGit(ctx, repo, "rev-parse", "--verify", ref)
+	if err != nil {
+		return "", nil
+	}
+	sha := strings.TrimSpace(out)
+	return sha, nil
+}
+
+func readCommit(ctx context.Context, repo, ref string) (Commit, error) {
+	format := "%H%x1f%h%x1f%s%x1f%b%x1e"
+	out, err := runGit(ctx, repo, "log", "-1", "--format="+format, ref)
+	if err != nil {
+		return Commit{}, err
+	}
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return Commit{}, fmt.Errorf("git log returned empty output")
+	}
+	parts := strings.Split(out, "\x1f")
+	if len(parts) < 4 {
+		return Commit{}, fmt.Errorf("unexpected git log output")
+	}
+	return Commit{
+		SHA:     strings.TrimSpace(parts[0]),
+		Short:   strings.TrimSpace(parts[1]),
+		Subject: strings.TrimSpace(parts[2]),
+		Body:    strings.TrimSpace(parts[3]),
+	}, nil
+}
+
+func resolveStackHeadRef(ctx context.Context, repo, trunk, headRef string, detached bool) (string, error) {
+	if !detached {
+		return headRef, nil
+	}
+	branch, err := findContainingBranch(ctx, repo, trunk)
+	if err != nil {
+		return "", err
+	}
+	if branch == "" {
+		return "HEAD", nil
 	}
 	return branch, nil
 }
 
-func listCommits(ctx context.Context, repo, trunk string) ([]Commit, error) {
-	format := "%H%x1f%h%x1f%s%x1f%b%x1e"
-	out, err := runGit(ctx, repo, "log", "--reverse", "--format="+format, trunk+"..HEAD")
+func findContainingBranch(ctx context.Context, repo, trunk string) (string, error) {
+	out, err := runGit(ctx, repo, "branch", "--contains", "HEAD", "--sort=-committerdate", "--format=%(refname:short)")
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	if strings.TrimSpace(out) == "" {
-		return nil, nil
-	}
-
-	records := strings.Split(out, "\x1e")
-	commits := make([]Commit, 0, len(records))
-	for _, record := range records {
-		record = strings.TrimSpace(record)
-		if record == "" {
+	lines := strings.Split(out, "\n")
+	trunk = strings.TrimSpace(trunk)
+	candidates := make([]string, 0, len(lines))
+	for _, line := range lines {
+		name := strings.TrimSpace(line)
+		if name == "" {
 			continue
 		}
-		fields := strings.Split(record, "\x1f")
-		if len(fields) < 4 {
-			return nil, fmt.Errorf("unexpected git log output")
-		}
-		body := strings.TrimSpace(fields[3])
-		commits = append(commits, Commit{
-			SHA:     strings.TrimSpace(fields[0]),
-			Short:   strings.TrimSpace(fields[1]),
-			Subject: strings.TrimSpace(fields[2]),
-			Body:    body,
-		})
+		candidates = append(candidates, name)
 	}
-
-	return commits, nil
+	if len(candidates) == 0 {
+		return "", nil
+	}
+	for _, name := range candidates {
+		if trunk != "" && name == trunk {
+			continue
+		}
+		return name, nil
+	}
+	return trunk, nil
 }
