@@ -62,7 +62,7 @@ func TestSubmitCurrentUpdatesTitle(t *testing.T) {
 			return "owner/repo\n", nil
 		}
 		if len(args) >= 2 && args[0] == "pr" && args[1] == "list" {
-			return "[{\"number\":1,\"baseRefName\":\"main\",\"headRefName\":\"jf/stack/01-new-title-abc123\",\"title\":\"Old title\"}]", nil
+			return "[{\"number\":1,\"baseRefName\":\"main\",\"headRefName\":\"jf/stack/01-id1\",\"title\":\"Old title\"}]", nil
 		}
 		if len(args) >= 2 && args[0] == "pr" && args[1] == "edit" {
 			editCalled = true
@@ -81,6 +81,14 @@ func TestSubmitCurrentUpdatesTitle(t *testing.T) {
 	mkdirAll = func(string, os.FileMode) error { return nil }
 
 	cfg := DefaultConfig()
+	cfg.Stacks["feature"] = StackMeta{
+		Trunk: "main",
+		Order: []string{"id-1"},
+		Commits: map[string]CommitMeta{
+			"id-1": {SHA: "abc123", Subject: "New title", Body: "Body"},
+		},
+		Current: "id-1",
+	}
 	results, err := SubmitCurrent(context.Background(), "/repo", cfg, SubmitOptions{})
 	if err != nil {
 		t.Fatalf("SubmitCurrent returned error: %v", err)

@@ -104,7 +104,7 @@ func SubmitCurrent(ctx context.Context, repo string, cfg Config, opts SubmitOpti
 			Body:    meta.Body,
 		}
 		position := i + 1
-		branch := BranchNameForCommit(opts.BranchPrefix, i+1, commit)
+		branch := BranchNameForCommit(opts.BranchPrefix, i+1, id, commit)
 		if err := createOrUpdateBranch(ctx, repo, branch, commit.SHA); err != nil {
 			return nil, err
 		}
@@ -233,16 +233,13 @@ func commitBody(commit Commit) string {
 	return commitTitle(commit)
 }
 
-func BranchNameForCommit(prefix string, index int, commit Commit) string {
+func BranchNameForCommit(prefix string, index int, id string, commit Commit) string {
 	cleanPrefix := strings.Trim(prefix, "/")
 	if cleanPrefix == "" {
 		cleanPrefix = defaultBranchPrefix
 	}
-	slug := slugify(commit.Subject)
-	if slug == "" {
-		slug = "commit"
-	}
-	return fmt.Sprintf("%s/%02d-%s-%s", cleanPrefix, index, slug, commit.Short)
+	suffix := stableBranchSuffix(id, commit)
+	return fmt.Sprintf("%s/%02d-%s", cleanPrefix, index, suffix)
 }
 
 var slugPattern = regexp.MustCompile(`[^a-z0-9]+`)
@@ -255,6 +252,24 @@ func slugify(input string) string {
 	replaced := slugPattern.ReplaceAllString(lower, "-")
 	replaced = strings.Trim(replaced, "-")
 	return replaced
+}
+
+func stableBranchSuffix(id string, commit Commit) string {
+	clean := strings.ReplaceAll(strings.TrimSpace(id), "-", "")
+	if clean != "" {
+		if len(clean) > 8 {
+			return clean[:8]
+		}
+		return clean
+	}
+	slug := slugify(commit.Subject)
+	if slug == "" {
+		return "commit"
+	}
+	if len(slug) > 16 {
+		return slug[:16]
+	}
+	return slug
 }
 
 func updateStackComments(ctx context.Context, repoRoot string, stackName string, stackInfo Stack, prs []stackPR) error {

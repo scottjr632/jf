@@ -34,21 +34,21 @@ func newPrOpenCmd(opts *rootOptions) *cobra.Command {
 				return nil
 			}
 
-			stackInfo, err := stack.CurrentStack(cmd.Context(), opts.repo, &cfg, trunk)
+			stackInfo, err := stack.CurrentStackDetails(cmd.Context(), opts.repo, &cfg, trunk)
 			if err != nil {
 				return err
 			}
-			if len(stackInfo.Commits) == 0 {
+			if len(stackInfo.Items) == 0 {
 				fmt.Fprintln(os.Stdout, "No commits in stack.")
 				return nil
 			}
 
 			currentIndex := -1
-			var currentCommit stack.Commit
-			for i, commit := range stackInfo.Commits {
-				if commit.SHA == status.CurrentSHA {
+			var currentItem stack.StackItem
+			for i, item := range stackInfo.Items {
+				if item.ID == status.CurrentID {
 					currentIndex = i
-					currentCommit = commit
+					currentItem = item
 					break
 				}
 			}
@@ -61,7 +61,7 @@ func newPrOpenCmd(opts *rootOptions) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			branch := stack.BranchNameForCommit(cfg.BranchPrefix, currentIndex+1, currentCommit)
+			branch := stack.BranchNameForCommit(cfg.BranchPrefix, currentIndex+1, currentItem.ID, currentItem.Commit)
 			pr, err := stack.PRForBranch(cmd.Context(), root, branch)
 			if err != nil {
 				return err
