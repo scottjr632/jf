@@ -46,6 +46,22 @@ jf submit
 `jf submit` creates or updates one PR per commit using the `gh` CLI.
 Trunk settings are stored in `.jf/stack.json`.
 
+Examples:
+
+```sh
+# Set trunk to main (default)
+jf trunk main
+
+# View the current stack of commits (oldest -> newest)
+jf ls
+
+# Create/update PRs for each commit in the stack
+jf submit
+
+# Override trunk for a one-off stack listing
+jf ls --trunk release
+```
+
 Git passthrough:
 
 ```sh
