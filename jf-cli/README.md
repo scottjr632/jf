@@ -34,6 +34,18 @@ absolute path to opt out.
 `jf new` opens a subshell in the new worktree by default. Use
 `--no-checkout` to skip that behavior.
 
+Stacked commits:
+
+```sh
+jf ls
+jf trunk [branch]
+jf submit
+```
+
+`jf ls` shows commits between trunk and HEAD as the current stack.
+`jf submit` creates or updates one PR per commit using the `gh` CLI.
+Trunk settings are stored in `.jf/stack.json`.
+
 Git passthrough:
 
 ```sh
