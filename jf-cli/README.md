@@ -56,7 +56,7 @@ jf restack
 jf submit
 jf next
 jf prev
-jf goto <commit>
+jf goto <commit|main>
 jf stack status
 ```
 
@@ -101,7 +101,7 @@ jf stack status
 # Walk commit stack (prompts if multiple children)
 jf next
 jf prev
-jf goto <commit>
+jf goto <commit|main>
 ```
 
 Git passthrough:

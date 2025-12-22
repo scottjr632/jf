@@ -12,13 +12,14 @@ import (
 
 	"github.com/scottjr632/jf-cli/internal/git"
 	"github.com/scottjr632/jf-cli/internal/stack"
+	"github.com/scottjr632/jf-cli/internal/worktree"
 	"github.com/spf13/cobra"
 )
 
 func newGotoCmd(opts *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "goto [commit]",
-		Short: "Checkout a tracked stack commit by hash",
+		Short: "Checkout a stack commit, worktree commit, or main",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := stack.Load(cmd.Context(), opts.repo)
@@ -31,12 +32,18 @@ func newGotoCmd(opts *rootOptions) *cobra.Command {
 				selection *stackCommitOption
 			)
 			if len(args) == 0 {
-				chosen, err := promptStackCommitSelection(cfg)
+				chosen, err := promptGotoSelection(cmd.Context(), opts.repo, cfg)
 				if err != nil {
 					return err
 				}
-				selection = &chosen
-				ref = chosen.meta.SHA
+				ref = chosen.ref
+				if chosen.stackName != "" {
+					selection = &stackCommitOption{
+						stackName: chosen.stackName,
+						commitID:  chosen.commitID,
+						meta:      chosen.meta,
+					}
+				}
 			} else {
 				ref = strings.TrimSpace(args[0])
 				if ref == "" {
@@ -63,14 +70,32 @@ func newGotoCmd(opts *rootOptions) *cobra.Command {
 				var ok bool
 				stackName, commitID, meta, ok = stack.FindStackCommit(&cfg, sha)
 				if !ok {
-					return fmt.Errorf("commit %s not found in jf stacks", shortSHA(sha))
+					allowed, err := isAllowedGotoTarget(cmd.Context(), opts.repo, cfg, ref, sha)
+					if err != nil {
+						return err
+					}
+					if !allowed {
+						return fmt.Errorf("commit %s not found in jf stacks or worktrees", shortSHA(sha))
+					}
 				}
 			}
 
-			cfg.CurrentStack = stackName
-			if stackMeta, ok := cfg.Stacks[stackName]; ok {
-				stackMeta.Current = commitID
-				cfg.Stacks[stackName] = stackMeta
+			if stackName != "" {
+				cfg.CurrentStack = stackName
+				if stackMeta, ok := cfg.Stacks[stackName]; ok {
+					stackMeta.Current = commitID
+					cfg.Stacks[stackName] = stackMeta
+				}
+			}
+
+			if meta.SHA == "" {
+				meta.SHA = sha
+			}
+			if meta.Subject == "" {
+				subject, err := git.Run(cmd.Context(), opts.repo, "log", "-1", "--format=%s", sha)
+				if err == nil {
+					meta.Subject = strings.TrimSpace(subject)
+				}
 			}
 
 			fmt.Fprintf(os.Stdout, "checkout %s %s\n", shortSHA(meta.SHA), meta.Subject)
@@ -108,6 +133,118 @@ type stackCommitOption struct {
 	stackName string
 	commitID  string
 	meta      stack.CommitMeta
+}
+
+type gotoOption struct {
+	ref       string
+	label     string
+	stackName string
+	commitID  string
+	meta      stack.CommitMeta
+}
+
+func promptGotoSelection(ctx context.Context, repo string, cfg stack.Config) (gotoOption, error) {
+	options, err := collectGotoOptions(ctx, repo, cfg)
+	if err != nil {
+		return gotoOption{}, err
+	}
+	if len(options) == 0 {
+		return gotoOption{}, fmt.Errorf("no commits found")
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Fprintln(os.Stdout, "Select a commit:")
+		for i, option := range options {
+			fmt.Fprintf(os.Stdout, "  %d) %s\n", i+1, option.label)
+		}
+		fmt.Fprint(os.Stdout, "Enter number: ")
+
+		text, err := reader.ReadString('\n')
+		if err != nil && len(text) == 0 {
+			return gotoOption{}, err
+		}
+		trimmed := strings.TrimSpace(text)
+		if trimmed == "" {
+			if err == io.EOF {
+				return gotoOption{}, err
+			}
+			continue
+		}
+		index, convErr := strconv.Atoi(trimmed)
+		if convErr != nil || index < 1 || index > len(options) {
+			fmt.Fprintln(os.Stdout, "Invalid selection.")
+			if err == io.EOF {
+				return gotoOption{}, err
+			}
+			continue
+		}
+		return options[index-1], nil
+	}
+}
+
+func collectGotoOptions(ctx context.Context, repo string, cfg stack.Config) ([]gotoOption, error) {
+	stackOptions := collectStackCommitOptions(cfg)
+	options := make([]gotoOption, 0, len(stackOptions))
+	seen := make(map[string]bool)
+
+	for _, option := range stackOptions {
+		sha := strings.TrimSpace(option.meta.SHA)
+		if sha != "" {
+			seen[sha] = true
+		}
+		options = append(options, gotoOption{
+			ref:       option.meta.SHA,
+			label:     formatStackCommitOption(option),
+			stackName: option.stackName,
+			commitID:  option.commitID,
+			meta:      option.meta,
+		})
+	}
+
+	entries, err := worktree.ListEntries(ctx, repo)
+	if err != nil {
+		return nil, err
+	}
+	hasTrunk := false
+	for _, entry := range entries {
+		if entry.Branch == strings.TrimSpace(cfg.Trunk) && entry.Branch != "" {
+			hasTrunk = true
+		}
+		sha := strings.TrimSpace(entry.Head)
+		if sha == "" {
+			continue
+		}
+		if seen[sha] {
+			continue
+		}
+		seen[sha] = true
+		options = append(options, gotoOption{
+			ref:   sha,
+			label: formatWorktreeCommitOption(entry),
+		})
+	}
+
+	trunk := strings.TrimSpace(cfg.Trunk)
+	if trunk == "" {
+		trunk = "main"
+	}
+	if !hasTrunk {
+		options = append(options, gotoOption{
+			ref:   trunk,
+			label: fmt.Sprintf("trunk: %s", trunk),
+		})
+	}
+
+	return options, nil
+}
+
+func formatWorktreeCommitOption(entry worktree.Entry) string {
+	label := "detached"
+	if entry.Branch != "" {
+		label = entry.Branch
+	}
+	return fmt.Sprintf("worktree: %s %s (%s)", label, shortSHA(entry.Head), entry.Path)
 }
 
 func promptStackCommitSelection(cfg stack.Config) (stackCommitOption, error) {
@@ -193,4 +330,23 @@ func formatStackCommitOption(option stackCommitOption) string {
 		subject = "(no subject)"
 	}
 	return fmt.Sprintf("%s: %s %s", option.stackName, shortSHA(option.meta.SHA), subject)
+}
+
+func isAllowedGotoTarget(ctx context.Context, repo string, cfg stack.Config, ref, sha string) (bool, error) {
+	ref = strings.TrimSpace(ref)
+	if ref != "" {
+		if ref == "main" || ref == cfg.Trunk {
+			return true, nil
+		}
+	}
+	entries, err := worktree.ListEntries(ctx, repo)
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range entries {
+		if strings.TrimSpace(entry.Head) == sha {
+			return true, nil
+		}
+	}
+	return false, nil
 }
