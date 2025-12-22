@@ -3,6 +3,7 @@ package stack
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -69,15 +70,38 @@ func resolveStack(ctx context.Context, repo string, cfg *Config, trunkOverride s
 		if err != nil {
 			return resolvedStack{}, err
 		}
+		preferredIDs := map[string]string{}
+		if cfg.CurrentStack != "" {
+			if existing, ok := cfg.Stacks[cfg.CurrentStack]; ok {
+				preferredIDs = commitIDsBySHA(existing)
+			}
+		}
+		allIDs := commitIDsBySHAFromConfig(cfg)
 		order := make([]string, 0, len(commits))
 		commitMap := make(map[string]CommitMeta, len(commits))
-		for _, commit := range commits {
-			id, err := newUUID()
-			if err != nil {
-				return resolvedStack{}, err
+		idBySHA := make(map[string]string, len(commits))
+		for _, node := range commits {
+			commit := node.Commit
+			id := preferredIDs[commit.SHA]
+			if id == "" {
+				id = allIDs[commit.SHA]
+			}
+			if id == "" {
+				id, err = newUUID()
+				if err != nil {
+					return resolvedStack{}, err
+				}
 			}
 			order = append(order, id)
 			commitMap[id] = CommitMeta{SHA: commit.SHA, Subject: commit.Subject, Body: commit.Body}
+			idBySHA[commit.SHA] = id
+		}
+		for _, node := range commits {
+			commit := node.Commit
+			id := idBySHA[commit.SHA]
+			meta := commitMap[id]
+			meta.Parent = pickParentID(node.Parents, idBySHA)
+			commitMap[id] = meta
 		}
 		stack = StackMeta{Trunk: effectiveTrunk, Order: order, Commits: commitMap}
 		changed = true
@@ -105,6 +129,47 @@ func resolveStack(ctx context.Context, repo string, cfg *Config, trunkOverride s
 	}
 
 	return resolved, nil
+}
+
+func commitIDsBySHA(stack StackMeta) map[string]string {
+	order := stackOrder(stack)
+	ids := make(map[string]string, len(order))
+	for _, id := range order {
+		meta, ok := stack.Commits[id]
+		if !ok {
+			continue
+		}
+		sha := strings.TrimSpace(meta.SHA)
+		if sha == "" {
+			continue
+		}
+		if _, exists := ids[sha]; !exists {
+			ids[sha] = id
+		}
+	}
+	return ids
+}
+
+func commitIDsBySHAFromConfig(cfg *Config) map[string]string {
+	if cfg == nil {
+		return map[string]string{}
+	}
+	names := make([]string, 0, len(cfg.Stacks))
+	for name := range cfg.Stacks {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	ids := make(map[string]string)
+	for _, name := range names {
+		stack := cfg.Stacks[name]
+		for sha, id := range commitIDsBySHA(stack) {
+			if _, exists := ids[sha]; !exists {
+				ids[sha] = id
+			}
+		}
+	}
+	return ids
 }
 
 func syncStackCurrent(ctx context.Context, repo string, stack *StackMeta) (bool, error) {
@@ -155,8 +220,9 @@ func commitIDForSHA(stack StackMeta, sha string) string {
 }
 
 func stackCommits(stack StackMeta) []Commit {
-	commits := make([]Commit, 0, len(stack.Order))
-	for _, id := range stack.Order {
+	order := stackOrder(stack)
+	commits := make([]Commit, 0, len(order))
+	for _, id := range order {
 		meta, ok := stack.Commits[id]
 		if !ok {
 			continue
@@ -187,17 +253,127 @@ func refreshStackFromGit(ctx context.Context, repo, trunk, head string, stack *S
 	if head == "" {
 		return fmt.Errorf("stack head ref is empty")
 	}
-	if len(commits) != len(stack.Order) {
+	order := stackOrder(*stack)
+	if len(commits) != len(order) {
 		return fmt.Errorf("stack size mismatch after rebase")
 	}
-	for i, commit := range commits {
-		id := stack.Order[i]
-		stack.Commits[id] = CommitMeta{SHA: commit.SHA, Subject: commit.Subject, Body: commit.Body}
+	newCommits := make(map[string]CommitMeta, len(commits))
+	idBySHA := make(map[string]string, len(commits))
+	for i, node := range commits {
+		commit := node.Commit
+		id := order[i]
+		newCommits[id] = CommitMeta{SHA: commit.SHA, Subject: commit.Subject, Body: commit.Body}
+		idBySHA[commit.SHA] = id
 	}
+	for _, node := range commits {
+		commit := node.Commit
+		id := idBySHA[commit.SHA]
+		meta := newCommits[id]
+		meta.Parent = pickParentID(node.Parents, idBySHA)
+		newCommits[id] = meta
+	}
+	stack.Order = order
+	stack.Commits = newCommits
 	if headSHA, err := currentSHA(ctx, repo); err == nil {
 		if id := commitIDForSHA(*stack, headSHA); id != "" {
 			stack.Current = id
 		}
 	}
 	return nil
+}
+
+func stackOrder(stack StackMeta) []string {
+	if len(stack.Order) != 0 {
+		return append([]string{}, stack.Order...)
+	}
+	if len(stack.Commits) == 0 {
+		return nil
+	}
+	children := make(map[string][]string, len(stack.Commits))
+	roots := make([]string, 0, len(stack.Commits))
+	for id, meta := range stack.Commits {
+		parent := strings.TrimSpace(meta.Parent)
+		if parent == "" || stack.Commits[parent].SHA == "" {
+			roots = append(roots, id)
+			continue
+		}
+		children[parent] = append(children[parent], id)
+	}
+	sort.Strings(roots)
+	for parent, ids := range children {
+		sort.Strings(ids)
+		children[parent] = ids
+	}
+	order := make([]string, 0, len(stack.Commits))
+	var visit func(id string)
+	visit = func(id string) {
+		order = append(order, id)
+		for _, child := range children[id] {
+			visit(child)
+		}
+	}
+	for _, root := range roots {
+		visit(root)
+	}
+	return order
+}
+
+func stackChildren(stack StackMeta) map[string][]string {
+	children := make(map[string][]string, len(stack.Commits))
+	for id, meta := range stack.Commits {
+		parent := strings.TrimSpace(meta.Parent)
+		if parent == "" {
+			continue
+		}
+		children[parent] = append(children[parent], id)
+	}
+	if len(stack.Order) == 0 {
+		for parent, ids := range children {
+			sort.Strings(ids)
+			children[parent] = ids
+		}
+		return children
+	}
+	index := make(map[string]int, len(stack.Order))
+	for i, id := range stack.Order {
+		index[id] = i
+	}
+	for parent, ids := range children {
+		sort.Slice(ids, func(i, j int) bool {
+			return index[ids[i]] < index[ids[j]]
+		})
+		children[parent] = ids
+	}
+	return children
+}
+
+func stackRoots(stack StackMeta) []string {
+	roots := make([]string, 0, len(stack.Commits))
+	for id, meta := range stack.Commits {
+		parent := strings.TrimSpace(meta.Parent)
+		if parent == "" || stack.Commits[parent].SHA == "" {
+			roots = append(roots, id)
+		}
+	}
+	if len(stack.Order) == 0 {
+		sort.Strings(roots)
+		return roots
+	}
+	index := make(map[string]int, len(stack.Order))
+	for i, id := range stack.Order {
+		index[id] = i
+	}
+	sort.Slice(roots, func(i, j int) bool {
+		return index[roots[i]] < index[roots[j]]
+	})
+	return roots
+}
+
+func pickParentID(parents []string, idsBySHA map[string]string) string {
+	for _, parentSHA := range parents {
+		if id := idsBySHA[parentSHA]; id != "" {
+			return id
+		}
+	}
+	return ""
 }

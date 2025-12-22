@@ -79,7 +79,7 @@ func SubmitCurrent(ctx context.Context, repo string, cfg Config, opts SubmitOpti
 			return nil, err
 		}
 	}
-	if len(resolved.stack.Order) == 0 {
+	if len(resolved.stack.Commits) == 0 {
 		return nil, fmt.Errorf("no commits to submit")
 	}
 
@@ -88,11 +88,12 @@ func SubmitCurrent(ctx context.Context, repo string, cfg Config, opts SubmitOpti
 		return nil, err
 	}
 
-	results := make([]SubmitResult, 0, len(resolved.stack.Order))
-	stackPRs := make([]stackPR, 0, len(resolved.stack.Order))
-	base := resolved.effectiveTrunk
+	order := stackOrder(resolved.stack)
+	results := make([]SubmitResult, 0, len(order))
+	stackPRs := make([]stackPR, 0, len(order))
+	branchByID := make(map[string]string, len(order))
 
-	for i, id := range resolved.stack.Order {
+	for i, id := range order {
 		meta, ok := resolved.stack.Commits[id]
 		if !ok {
 			return nil, fmt.Errorf("missing metadata for stack commit")
@@ -105,6 +106,13 @@ func SubmitCurrent(ctx context.Context, repo string, cfg Config, opts SubmitOpti
 		}
 		position := i + 1
 		branch := BranchNameForCommit(opts.BranchPrefix, i+1, id, commit)
+		base := resolved.effectiveTrunk
+		parentID := strings.TrimSpace(meta.Parent)
+		if parentID != "" {
+			if parentBranch, ok := branchByID[parentID]; ok {
+				base = parentBranch
+			}
+		}
 		if err := createOrUpdateBranch(ctx, repo, branch, commit.SHA); err != nil {
 			return nil, err
 		}
@@ -157,7 +165,7 @@ func SubmitCurrent(ctx context.Context, repo string, cfg Config, opts SubmitOpti
 
 		stackPRs = append(stackPRs, stackPR{Number: pr.Number, Title: title, Position: position})
 		results = append(results, result)
-		base = branch
+		branchByID[id] = branch
 	}
 
 	if err := updateStackComments(ctx, root, resolved.name, Stack{Trunk: resolved.effectiveTrunk, Head: resolved.headRef}, stackPRs); err != nil {

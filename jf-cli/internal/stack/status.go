@@ -50,6 +50,6 @@ func Status(ctx context.Context, repo string, cfg *Config, trunkOverride string)
 		CurrentID:    resolved.stack.Current,
 		CurrentSHA:   currentSHA,
 		CurrentShort: currentShort,
-		Count:        len(resolved.stack.Order),
+		Count:        len(resolved.stack.Commits),
 	}, nil
 }

@@ -60,11 +60,11 @@ jf goto <commit>
 jf stack status
 ```
 
-`jf ls` shows commits between trunk and HEAD as the current stack.
-`jf log-long` shows stack commits with PR status details.
+`jf ls` shows commits between trunk and HEAD as the current stack (tree view).
+`jf log-long` shows stack commits with PR status details (tree view).
 `jf submit` creates or updates one PR per commit using the `gh` CLI.
 `jf restack` ensures stack commits are rebased in order on top of trunk.
-Stack metadata (trunk, stacks, and current commit pointer) lives in `.jf/stack.json`.
+Stack metadata (trunk, commit parents, and current commit pointer) lives in `.jf/stack.json`.
 
 Examples:
 
@@ -72,7 +72,7 @@ Examples:
 # Set trunk to main (default)
 jf trunk main
 
-# View the current stack of commits (oldest -> newest)
+# View the current stack of commits (tree view)
 jf ls
 
 # View the current stack with PR status details
@@ -98,7 +98,7 @@ jf restack
 # Show current stack metadata
 jf stack status
 
-# Walk commit stack
+# Walk commit stack (prompts if multiple children)
 jf next
 jf prev
 jf goto <commit>

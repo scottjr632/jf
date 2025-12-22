@@ -8,7 +8,7 @@ func SyncStack(ctx context.Context, repo string, cfg *Config, trunkOverride stri
 	if err != nil {
 		return err
 	}
-	if len(resolved.stack.Order) == 0 {
+	if len(resolved.stack.Commits) == 0 {
 		return nil
 	}
 	if err := refreshStackFromGit(ctx, repo, resolved.effectiveTrunk, resolved.stackHead, &resolved.stack); err != nil {

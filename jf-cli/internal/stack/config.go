@@ -25,9 +25,10 @@ type CommitMeta struct {
 	SHA     string `json:"sha"`
 	Subject string `json:"subject"`
 	Body    string `json:"body"`
+	Parent  string `json:"parent,omitempty"`
 }
 
-// StackMeta stores commit ordering for a stack.
+// StackMeta stores commit metadata for a stack.
 type StackMeta struct {
 	Trunk   string                `json:"trunk"`
 	Order   []string              `json:"order"`
@@ -143,7 +144,29 @@ func applyDefaults(cfg *Config) {
 		if stack.Commits == nil {
 			stack.Commits = map[string]CommitMeta{}
 		}
+		ensureLinearParents(&stack)
 		cfg.Stacks[name] = stack
+	}
+}
+
+func ensureLinearParents(stack *StackMeta) {
+	if stack == nil || len(stack.Order) == 0 {
+		return
+	}
+	for i, id := range stack.Order {
+		meta, ok := stack.Commits[id]
+		if !ok {
+			continue
+		}
+		if strings.TrimSpace(meta.Parent) != "" {
+			continue
+		}
+		if i == 0 {
+			meta.Parent = ""
+		} else {
+			meta.Parent = stack.Order[i-1]
+		}
+		stack.Commits[id] = meta
 	}
 }
 

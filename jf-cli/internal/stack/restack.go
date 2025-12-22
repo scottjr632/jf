@@ -12,7 +12,7 @@ func Restack(ctx context.Context, repo string, cfg *Config, trunkOverride string
 	if err != nil {
 		return err
 	}
-	if len(resolved.stack.Order) == 0 {
+	if len(resolved.stack.Commits) == 0 {
 		return nil
 	}
 
@@ -20,12 +20,20 @@ func Restack(ctx context.Context, repo string, cfg *Config, trunkOverride string
 	if err != nil {
 		return err
 	}
-	expectedParent := trunkSHA
-
-	for _, id := range resolved.stack.Order {
+	order := stackOrder(resolved.stack)
+	for _, id := range order {
 		meta, ok := resolved.stack.Commits[id]
 		if !ok {
 			return fmt.Errorf("missing metadata for stack commit")
+		}
+		expectedParent := trunkSHA
+		parentID := strings.TrimSpace(meta.Parent)
+		if parentID != "" {
+			parentMeta, ok := resolved.stack.Commits[parentID]
+			if !ok {
+				return fmt.Errorf("missing parent metadata for stack commit")
+			}
+			expectedParent = parentMeta.SHA
 		}
 		parentSHA, err := commitParentSHA(ctx, repo, meta.SHA)
 		if err != nil {
@@ -42,7 +50,6 @@ func Restack(ctx context.Context, repo string, cfg *Config, trunkOverride string
 			cfg.CurrentStack = resolved.name
 			return Save(ctx, repo, *cfg)
 		}
-		expectedParent = meta.SHA
 	}
 
 	if resolved.changed {

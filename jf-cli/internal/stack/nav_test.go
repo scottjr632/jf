@@ -18,7 +18,7 @@ func TestNextCommitMovesForward(t *testing.T) {
 		mkdirAll = originalMkdir
 	}()
 
-	format := "%H%x1f%h%x1f%s%x1f%b%x1e"
+	format := "%H%x1f%P%x1f%h%x1f%s%x1f%b%x1e"
 
 	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
 		joined := strings.Join(args, " ")
@@ -33,9 +33,9 @@ func TestNextCommitMovesForward(t *testing.T) {
 			return "trunksha\n", nil
 		case "merge-base --is-ancestor main feature":
 			return "", nil
-		case "log --reverse --format=" + format + " main..feature":
-			return "sha1\x1fsha1\x1fFirst\x1f\x1e" +
-				"sha2\x1fsha2\x1fSecond\x1f\x1e", nil
+		case "log --reverse --topo-order --format=" + format + " main..feature":
+			return "sha1\x1ftrunksha\x1fsha1\x1fFirst\x1f\x1e" +
+				"sha2\x1fsha1\x1fsha2\x1fSecond\x1f\x1e", nil
 		case "rev-parse HEAD":
 			return "sha1\n", nil
 		default:
@@ -66,7 +66,7 @@ func TestPrevCommitMovesBackward(t *testing.T) {
 		mkdirAll = originalMkdir
 	}()
 
-	format := "%H%x1f%h%x1f%s%x1f%b%x1e"
+	format := "%H%x1f%P%x1f%h%x1f%s%x1f%b%x1e"
 
 	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
 		joined := strings.Join(args, " ")
@@ -81,9 +81,9 @@ func TestPrevCommitMovesBackward(t *testing.T) {
 			return "trunksha\n", nil
 		case "merge-base --is-ancestor main feature":
 			return "", nil
-		case "log --reverse --format=" + format + " main..feature":
-			return "sha1\x1fsha1\x1fFirst\x1f\x1e" +
-				"sha2\x1fsha2\x1fSecond\x1f\x1e", nil
+		case "log --reverse --topo-order --format=" + format + " main..feature":
+			return "sha1\x1ftrunksha\x1fsha1\x1fFirst\x1f\x1e" +
+				"sha2\x1fsha1\x1fsha2\x1fSecond\x1f\x1e", nil
 		case "rev-parse HEAD":
 			return "sha2\n", nil
 		default:

@@ -3,6 +3,7 @@ package stack
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 )
@@ -32,7 +33,7 @@ func TestRecordAmendUpdatesCommitSHA(t *testing.T) {
 		case len(args) == 2 && args[0] == "rev-parse" && args[1] == "--show-toplevel":
 			return "/repo\n", nil
 		default:
-			return "", errors.New("unexpected git call")
+			return "", fmt.Errorf("unexpected git call: %v", args)
 		}
 	}
 
@@ -71,7 +72,7 @@ func TestRecordAmendRebasesDescendants(t *testing.T) {
 		mkdirAll = originalMkdir
 	}()
 
-	format := "%H%x1f%h%x1f%s%x1f%b%x1e"
+	format := "%H%x1f%P%x1f%h%x1f%s%x1f%b%x1e"
 
 	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
 		switch {
@@ -85,13 +86,13 @@ func TestRecordAmendRebasesDescendants(t *testing.T) {
 			return "newsha1\x1fnewsha1\x1fNew\x1fBody\x1e", nil
 		case len(args) == 2 && args[0] == "rev-parse" && args[1] == "--show-toplevel":
 			return "/repo\n", nil
-		case len(args) == 6 && args[0] == "branch" && args[1] == "--contains":
+		case len(args) == 5 && args[0] == "branch" && args[1] == "--contains":
 			return "", nil
-		case len(args) == 4 && args[0] == "log" && args[1] == "--reverse" && args[2] == "--format="+format:
-			return "newsha1\x1fnewsha1\x1fNew\x1fBody\x1e" +
-				"childsha\x1fchildsha\x1fChild\x1f\x1e", nil
+		case len(args) == 5 && args[0] == "log" && args[1] == "--reverse" && args[2] == "--topo-order" && args[3] == "--format="+format:
+			return "newsha1\x1foldbase\x1fnewsha1\x1fNew\x1fBody\x1e" +
+				"childsha\x1fnewsha1\x1fchildsha\x1fChild\x1f\x1e", nil
 		default:
-			return "", errors.New("unexpected git call")
+			return "", fmt.Errorf("unexpected git call: %v", args)
 		}
 	}
 

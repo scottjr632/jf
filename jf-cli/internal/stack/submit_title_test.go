@@ -20,7 +20,7 @@ func TestSubmitCurrentUpdatesTitle(t *testing.T) {
 		mkdirAll = originalMkdir
 	}()
 
-	format := "%H%x1f%h%x1f%s%x1f%b%x1e"
+	format := "%H%x1f%P%x1f%h%x1f%s%x1f%b%x1e"
 
 	runGit = func(ctx context.Context, repo string, args ...string) (string, error) {
 		if reflect.DeepEqual(args, []string{"rev-parse", "--show-toplevel"}) {
@@ -41,8 +41,8 @@ func TestSubmitCurrentUpdatesTitle(t *testing.T) {
 		if reflect.DeepEqual(args, []string{"merge-base", "--is-ancestor", "main", "feature"}) {
 			return "", nil
 		}
-		if reflect.DeepEqual(args, []string{"log", "--reverse", "--format=" + format, "main..feature"}) {
-			return "abc123\x1fabc123\x1fNew title\x1fBody\x1e", nil
+		if reflect.DeepEqual(args, []string{"log", "--reverse", "--topo-order", "--format=" + format, "main..feature"}) {
+			return "abc123\x1ftrunksha\x1fabc123\x1fNew title\x1fBody\x1e", nil
 		}
 		if len(args) == 4 && args[0] == "branch" && args[1] == "-f" {
 			return "", nil

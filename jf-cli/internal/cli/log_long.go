@@ -40,19 +40,23 @@ func newLogLongCmd(opts *rootOptions) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			for i, item := range stackInfo.Items {
-				commit := item.Commit
-				fmt.Fprintf(os.Stdout, "  %d) %s %s\n", i+1, commit.Short, commit.Subject)
-				branch := stack.BranchNameForCommit(cfg.BranchPrefix, i+1, item.ID, commit)
+			for _, entry := range buildStackTree(stackInfo.Items) {
+				commit := entry.Item.Commit
+				marker := " "
+				if entry.Item.ID == stackInfo.CurrentID {
+					marker = "*"
+				}
+				fmt.Fprintf(os.Stdout, "  %s%s%d) %s %s\n", entry.Prefix, marker, entry.Position, commit.Short, commit.Subject)
+				branch := stack.BranchNameForCommit(cfg.BranchPrefix, entry.Position, entry.Item.ID, commit)
 				pr, err := stack.PRForBranch(cmd.Context(), root, branch)
 				if err != nil {
 					return err
 				}
 				if pr == nil {
-					fmt.Fprintln(os.Stdout, "     PR: none")
+					fmt.Fprintf(os.Stdout, "%sPR: none\n", entry.Indent)
 					continue
 				}
-				fmt.Fprintf(os.Stdout, "     PR: %s %s\n", pr.State, pr.URL)
+				fmt.Fprintf(os.Stdout, "%sPR: %s %s\n", entry.Indent, pr.State, pr.URL)
 			}
 			return nil
 		},

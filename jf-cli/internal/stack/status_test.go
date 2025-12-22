@@ -33,8 +33,8 @@ func TestStatusReturnsCurrent(t *testing.T) {
 			return "", nil
 		case "merge-base --is-ancestor main feature":
 			return "", nil
-		case "log --reverse --format=%H%x1f%h%x1f%s%x1f%b%x1e main..feature":
-			return "sha1\x1fsha1\x1fFirst\x1f\x1e", nil
+		case "log --reverse --topo-order --format=%H%x1f%P%x1f%h%x1f%s%x1f%b%x1e main..feature":
+			return "sha1\x1ftrunksha\x1fsha1\x1fFirst\x1f\x1e", nil
 		default:
 			return "", errors.New("unexpected git call")
 		}

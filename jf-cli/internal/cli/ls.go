@@ -24,18 +24,23 @@ func newLsCmd(opts *rootOptions) *cobra.Command {
 				trunk = cfg.Trunk
 			}
 
-			stackInfo, err := stack.CurrentStack(cmd.Context(), opts.repo, &cfg, trunk)
+			stackInfo, err := stack.CurrentStackDetails(cmd.Context(), opts.repo, &cfg, trunk)
 			if err != nil {
 				return err
 			}
 			fmt.Fprintf(os.Stdout, "trunk: %s\n", stackInfo.Trunk)
 			fmt.Fprintf(os.Stdout, "head: %s\n", stackInfo.Head)
-			if len(stackInfo.Commits) == 0 {
+			if len(stackInfo.Items) == 0 {
 				fmt.Fprintln(os.Stdout, "No commits in stack.")
 				return nil
 			}
-			for i, commit := range stackInfo.Commits {
-				fmt.Fprintf(os.Stdout, "  %d) %s %s\n", i+1, commit.Short, commit.Subject)
+			for _, entry := range buildStackTree(stackInfo.Items) {
+				commit := entry.Item.Commit
+				marker := " "
+				if entry.Item.ID == stackInfo.CurrentID {
+					marker = "*"
+				}
+				fmt.Fprintf(os.Stdout, "  %s%s%d) %s %s\n", entry.Prefix, marker, entry.Position, commit.Short, commit.Subject)
 			}
 			return nil
 		},
