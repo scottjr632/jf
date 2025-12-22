@@ -36,6 +36,7 @@ func newRootCommand() *cobra.Command {
 		newLogLongCmd(opts),
 		newNextCmd(opts),
 		newPrevCmd(opts),
+		newGotoCmd(opts),
 		newPrOpenCmd(opts),
 		newAmendCmd(opts),
 		newTrunkCmd(opts),
