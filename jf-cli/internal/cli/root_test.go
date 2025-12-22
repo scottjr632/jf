@@ -33,7 +33,7 @@ func TestShouldPassthrough(t *testing.T) {
 		{name: "help-flag", args: []string{"--help"}, want: false},
 		{name: "short-help", args: []string{"-h"}, want: false},
 		{name: "repo-list", args: []string{"-C", "repo", "list"}, want: false},
-		{name: "status", args: []string{"status"}, want: true},
+		{name: "status", args: []string{"status"}, want: false},
 		{name: "git-subcommand", args: []string{"git", "status"}, want: false},
 		{name: "repo-status", args: []string{"-C", "repo", "status"}, want: true},
 		{name: "repo-equals-status", args: []string{"--repo=repo", "status"}, want: true},

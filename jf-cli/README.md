@@ -29,6 +29,8 @@ jf worktree prune
 `jf worktree commit` runs `git add -p` and then prompts to add untracked files before committing.
 `jf amend` and `jf worktree amend` use the same staging flow and default to `--no-edit` unless you pass `--edit`.
 
+`jf status` shows `git status` along with worktree and stack metadata.
+
 When you pass a relative path that does not start with `./` or `../`, `jf`
 stores worktrees under `~/.jf/<repo>/worktrees/<name>`. Use `./path` or an
 absolute path to opt out.
@@ -97,7 +99,6 @@ jf prev
 Git passthrough:
 
 ```sh
-jf status
 jf log --oneline
 jf -C /path/to/repo status
 ```
