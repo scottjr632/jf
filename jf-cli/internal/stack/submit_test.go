@@ -113,10 +113,10 @@ func TestSubmitCurrentCreatesAndUpdates(t *testing.T) {
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}
-	if results[0].Action != SubmitCreated || !strings.Contains(results[0].Branch, "01-first") {
+	if results[0].Action != SubmitCreated || !strings.Contains(results[0].Branch, "01-id1") {
 		t.Fatalf("unexpected first result: %#v", results[0])
 	}
-	if results[1].Action != SubmitUpdated || !strings.Contains(results[1].Branch, "02-second") {
+	if results[1].Action != SubmitUpdated || !strings.Contains(results[1].Branch, "02-id2") {
 		t.Fatalf("unexpected second result: %#v", results[1])
 	}
 }

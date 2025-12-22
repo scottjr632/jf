@@ -3,6 +3,7 @@ package stack
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -69,12 +70,25 @@ func resolveStack(ctx context.Context, repo string, cfg *Config, trunkOverride s
 		if err != nil {
 			return resolvedStack{}, err
 		}
+		preferredIDs := map[string]string{}
+		if cfg.CurrentStack != "" {
+			if existing, ok := cfg.Stacks[cfg.CurrentStack]; ok {
+				preferredIDs = commitIDsBySHA(existing)
+			}
+		}
+		allIDs := commitIDsBySHAFromConfig(cfg)
 		order := make([]string, 0, len(commits))
 		commitMap := make(map[string]CommitMeta, len(commits))
 		for _, commit := range commits {
-			id, err := newUUID()
-			if err != nil {
-				return resolvedStack{}, err
+			id := preferredIDs[commit.SHA]
+			if id == "" {
+				id = allIDs[commit.SHA]
+			}
+			if id == "" {
+				id, err = newUUID()
+				if err != nil {
+					return resolvedStack{}, err
+				}
 			}
 			order = append(order, id)
 			commitMap[id] = CommitMeta{SHA: commit.SHA, Subject: commit.Subject, Body: commit.Body}
@@ -105,6 +119,46 @@ func resolveStack(ctx context.Context, repo string, cfg *Config, trunkOverride s
 	}
 
 	return resolved, nil
+}
+
+func commitIDsBySHA(stack StackMeta) map[string]string {
+	ids := make(map[string]string, len(stack.Order))
+	for _, id := range stack.Order {
+		meta, ok := stack.Commits[id]
+		if !ok {
+			continue
+		}
+		sha := strings.TrimSpace(meta.SHA)
+		if sha == "" {
+			continue
+		}
+		if _, exists := ids[sha]; !exists {
+			ids[sha] = id
+		}
+	}
+	return ids
+}
+
+func commitIDsBySHAFromConfig(cfg *Config) map[string]string {
+	if cfg == nil {
+		return map[string]string{}
+	}
+	names := make([]string, 0, len(cfg.Stacks))
+	for name := range cfg.Stacks {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	ids := make(map[string]string)
+	for _, name := range names {
+		stack := cfg.Stacks[name]
+		for sha, id := range commitIDsBySHA(stack) {
+			if _, exists := ids[sha]; !exists {
+				ids[sha] = id
+			}
+		}
+	}
+	return ids
 }
 
 func syncStackCurrent(ctx context.Context, repo string, stack *StackMeta) (bool, error) {
